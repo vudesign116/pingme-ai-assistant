@@ -22,7 +22,7 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <Router>
+      <Router basename="/pingme-ai-assistant">
         <div className="app">
           <Routes>
             <Route 
