@@ -105,7 +105,11 @@ export const chatService = {
       } else {
         // Fallback to mock response if webhook fails
         console.warn('⚠️ Webhook failed or no response, using fallback');
-        console.warn('Webhook error:', webhookResult.error);
+        console.warn('Webhook error details:', {
+          error: webhookResult.error || 'Unknown error',
+          success: webhookResult.success,
+          details: webhookResult.details
+        });
         
         const lowerMessage = message.toLowerCase();
         
@@ -192,12 +196,17 @@ export const chatService = {
       url: URL.createObjectURL(file) // For preview
     };
     
-    // Send file upload info to webhook
+    // Send file upload info to webhook (optional - don't fail if webhook can't handle it)
     try {
-      await webhookService.sendFileUpload(fileData);
+      const webhookResult = await webhookService.sendFileUpload(fileData);
+      if (webhookResult.success) {
+        console.log('✅ File upload info sent to webhook successfully');
+      } else {
+        console.warn('⚠️ Webhook could not process file upload:', webhookResult.error);
+      }
     } catch (error) {
-      console.error('Failed to send file upload to webhook:', error);
-      // Don't fail the upload if webhook fails
+      console.warn('⚠️ Webhook not available for file uploads:', error.message);
+      // Continue with local file handling - don't fail the upload
     }
     
     return {

@@ -44,7 +44,7 @@ export const useChat = (user) => {
   const sendMessage = async (content, attachments = []) => {
     if (!content.trim() && attachments.length === 0) return;
 
-    // Add user message to chat
+    // Add user message to chat immediately
     const userMessage = {
       id: `user-msg-${Date.now()}`,
       content: content.trim(),

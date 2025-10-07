@@ -36,7 +36,13 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error('API Error:', error);
+    console.error('API Error Details:', {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      url: error.config?.url
+    });
     
     if (error.response?.status === 401) {
       // Token expired or invalid
@@ -360,10 +366,36 @@ export const webhookService = {
         data: response.data
       };
     } catch (error) {
-      console.error('Failed to send file upload to webhook:', error);
+      console.error('Failed to send file upload to webhook:', {
+        message: error.message || 'Unknown error',
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        code: error.code
+      });
+      
+      // Handle specific error cases
+      if (error.response?.status === 500) {
+        console.warn('🚫 Webhook server error (500) - webhook may not support file uploads');
+        return {
+          success: false,
+          error: 'Webhook không hỗ trợ upload file (server error 500)',
+          skipWebhook: true // Flag to indicate webhook should be skipped
+        };
+      }
+      
+      if (error.response?.status === 400 && error.response?.data?.status === 'ip not local') {
+        console.warn('🌐 IP restriction detected for file upload');
+        return {
+          success: false,
+          error: 'IP restriction - file upload not available',
+          skipWebhook: true
+        };
+      }
+      
       return {
         success: false,
-        error: error.message
+        error: error.message || 'Unknown error occurred'
       };
     }
   },
