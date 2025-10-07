@@ -18,7 +18,7 @@ export default defineConfig({
         changeOrigin: true,
         secure: true,
         rewrite: (path) => {
-          const newPath = '/webhook-test/e9bbd901-ec61-424a-963f-8b63a7f9b17d';
+          const newPath = '/webhook/e9bbd901-ec61-424a-963f-8b63a7f9b17d';
           console.log('Rewriting path:', path, '->', newPath);
           return newPath;
         },
