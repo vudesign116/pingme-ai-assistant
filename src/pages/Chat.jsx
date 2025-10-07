@@ -69,7 +69,15 @@ const Chat = ({ user, onLogout }) => {
   }, []);
 
   const handleSendMessage = async () => {
+    // Don't send empty messages
     if (!inputMessage.trim() && attachments.length === 0) return;
+    
+    // Validate: Images must be sent with text
+    const hasImages = attachments.some(file => file.type.startsWith('image/'));
+    if (hasImages && !inputMessage.trim()) {
+      showToast('Vui lòng nhập văn bản kèm theo hình ảnh', 'error');
+      return;
+    }
 
     await sendMessage(inputMessage, attachments);
     setInputMessage('');
@@ -385,7 +393,11 @@ const Chat = ({ user, onLogout }) => {
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder="Nhập tin nhắn..."
+            placeholder={
+              attachments.some(file => file.type.startsWith('image/')) 
+                ? "Nhập mô tả cho hình ảnh..." 
+                : "Nhập tin nhắn..."
+            }
             className="message-input"
             rows={1}
             disabled={loading}
@@ -394,7 +406,11 @@ const Chat = ({ user, onLogout }) => {
           <button 
             className="btn-send"
             onClick={handleSendMessage}
-            disabled={loading || (!inputMessage.trim() && attachments.length === 0)}
+            disabled={
+              loading || 
+              (!inputMessage.trim() && attachments.length === 0) ||
+              (attachments.some(file => file.type.startsWith('image/')) && !inputMessage.trim())
+            }
           >
             {loading ? (
               <div className="loading"></div>
