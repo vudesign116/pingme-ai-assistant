@@ -9,12 +9,14 @@ import {
   Bot,
   LogOut,
   MoreVertical,
-  Settings
+  Settings,
+  History
 } from 'lucide-react';
 import { useChat } from '../hooks/useChat';
 import { setupIOSViewport } from '../utils/iosViewport';
 import WebhookDebugger from '../components/WebhookDebugger';
 import MarkdownMessage from '../components/MarkdownMessage';
+import ChatHistoryManager from '../components/ChatHistoryManager';
 import './Chat.css';
 
 const Chat = ({ user, onLogout }) => {
@@ -23,6 +25,7 @@ const Chat = ({ user, onLogout }) => {
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showWebhookDebugger, setShowWebhookDebugger] = useState(false);
+  const [showHistoryManager, setShowHistoryManager] = useState(false);
   const [toast, setToast] = useState(null);
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
@@ -35,7 +38,11 @@ const Chat = ({ user, onLogout }) => {
     uploading, 
     messagesEndRef, 
     sendMessage, 
-    uploadFile 
+    uploadFile,
+    clearChat,
+    exportChatHistory,
+    importChatHistory,
+    getChatStats
   } = useChat(user);
 
   // Setup iOS viewport handling
@@ -146,6 +153,16 @@ const Chat = ({ user, onLogout }) => {
           
           {showUserMenu && (
             <div className="user-menu">
+              <button 
+                onClick={() => {
+                  setShowHistoryManager(true);
+                  setShowUserMenu(false);
+                }} 
+                className="menu-item"
+              >
+                <History size={16} />
+                Lịch Sử Chat
+              </button>
               <button 
                 onClick={() => {
                   setShowWebhookDebugger(true);
@@ -386,6 +403,22 @@ const Chat = ({ user, onLogout }) => {
       <WebhookDebugger 
         isVisible={showWebhookDebugger}
         onClose={() => setShowWebhookDebugger(false)}
+      />
+
+      {/* Chat History Manager */}
+      <ChatHistoryManager 
+        isVisible={showHistoryManager}
+        onClose={() => setShowHistoryManager(false)}
+        chatStats={getChatStats()}
+        onClearChat={() => {
+          clearChat();
+          showToast('Đã xóa lịch sử chat', 'success');
+        }}
+        onExportHistory={() => {
+          exportChatHistory();
+          showToast('Đã tải xuống lịch sử chat', 'success');
+        }}
+        onImportHistory={importChatHistory}
       />
     </div>
   );
