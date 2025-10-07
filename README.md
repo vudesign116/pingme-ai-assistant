@@ -1,12 +1,19 @@
 # 🚀 PingMe - AI Assistant Platform
 
 <div align="center">
-  <img src="https://img.shields.io/badge/React-18.3.1-blue?style=flat-square&logo=react" alt="React">
+  <img src="https://img.shields.io/badge/React-19.1.1-blue?style=flat-square&logo=react" alt="React">
   <img src="https://img.shields.io/badge/Vite-7.1.9-646CFF?style=flat-square&logo=vite" alt="Vite">
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="License">
 </div>
 
 > **Modern mobile-first AI assistant platform built with React.js & Vite**
+
+## 📚 Documentation
+
+📖 **[Complete Documentation](docs/README.md)** - Comprehensive project guide  
+🚀 **[Deployment Guide](docs/deployment/guide.md)** - GitHub Pages deployment  
+🔧 **[Bug Fixes](docs/fixes/summary.md)** - Solutions for common issues  
+⚙️ **[Setup Guide](docs/setup/initial.md)** - Initial project setup
 
 ## ✨ Features
 

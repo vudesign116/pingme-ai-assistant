@@ -11,6 +11,7 @@ import {
   MoreVertical
 } from 'lucide-react';
 import { useChat } from '../hooks/useChat';
+import { setupIOSViewport } from '../utils/iosViewport';
 import './Chat.css';
 
 const Chat = ({ user, onLogout }) => {
@@ -32,6 +33,12 @@ const Chat = ({ user, onLogout }) => {
     sendMessage, 
     uploadFile 
   } = useChat(user);
+
+  // Setup iOS viewport handling
+  useEffect(() => {
+    const cleanup = setupIOSViewport();
+    return cleanup;
+  }, []);
 
   // Handle click outside to close menus
   useEffect(() => {
