@@ -316,12 +316,22 @@ export const chatService = {
       processingError = error.message;
     }
     
+    // Create blob URL for preview with proper error handling
+    let previewUrl = null;
+    try {
+      previewUrl = URL.createObjectURL(file);
+      console.log(`🔗 Created blob URL for preview: ${file.name}`);
+    } catch (error) {
+      console.warn(`⚠️ Could not create blob URL for ${file.name}:`, error);
+    }
+    
     const fileData = {
       id: `file-${Date.now()}`,
       name: file.name,
       size: file.size,
       type: file.type,
-      url: URL.createObjectURL(file), // For preview
+      url: previewUrl, // For preview (can be null if failed)
+      originalFile: file, // Keep reference to original file
       
       // AI processing data
       processedData: processedData,

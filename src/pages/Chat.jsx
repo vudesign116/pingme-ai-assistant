@@ -103,6 +103,15 @@ const Chat = ({ user, onLogout }) => {
     const attachment = attachments.find(att => att.id === id);
     setAttachments(prev => prev.filter(att => att.id !== id));
     if (attachment) {
+      // Cleanup blob URL to prevent memory leaks
+      if (attachment.url && attachment.url.startsWith('blob:')) {
+        try {
+          URL.revokeObjectURL(attachment.url);
+          console.log(`🗑️ Cleaned up blob URL for: ${attachment.name}`);
+        } catch (error) {
+          console.warn(`Failed to cleanup blob URL for ${attachment.name}:`, error);
+        }
+      }
       showToast(`Đã xóa ${attachment.name}`, 'success');
     }
   };
@@ -218,9 +227,19 @@ const Chat = ({ user, onLogout }) => {
                       <div className="message-attachments">
                         {message.attachments.map((file) => (
                           <div key={file.id} className="attachment-preview">
-                            {file.type.startsWith('image/') ? (
-                              <img src={file.url} alt={file.name} className="attachment-image" />
-                            ) : (
+                            {file.type.startsWith('image/') && file.url ? (
+                              <img 
+                                src={file.url} 
+                                alt={file.name} 
+                                className="attachment-image"
+                                onError={(e) => {
+                                  console.warn(`Failed to load image: ${file.name}`);
+                                  e.target.style.display = 'none';
+                                  e.target.nextSibling.style.display = 'flex';
+                                }}
+                              />
+                            ) : null}
+                            {(!file.type.startsWith('image/') || !file.url) && (
                               <div className="attachment-file">
                                 <File size={16} />
                                 <span>{file.name}</span>
@@ -268,9 +287,19 @@ const Chat = ({ user, onLogout }) => {
           <div className="attachments-preview">
             {attachments.map((file) => (
               <div key={file.id} className="attachment-item">
-                {file.type.startsWith('image/') ? (
-                  <img src={file.url} alt={file.name} className="attachment-thumbnail" />
-                ) : (
+                {file.type.startsWith('image/') && file.url ? (
+                  <img 
+                    src={file.url} 
+                    alt={file.name} 
+                    className="attachment-thumbnail"
+                    onError={(e) => {
+                      console.warn(`Failed to load thumbnail: ${file.name}`);
+                      // Hide image and show file icon instead
+                      e.target.style.display = 'none';
+                    }}
+                  />
+                ) : null}
+                {(!file.type.startsWith('image/') || !file.url) && (
                   <div className="file-attachment">
                     <File size={16} />
                     <div className="file-info">
