@@ -22,19 +22,15 @@ export const useChat = (user) => {
 
   const loadChatHistory = async () => {
     try {
-      // Đầu tiên load từ localStorage
+      // Chỉ load từ localStorage - không gọi webhook tự động
       const localHistory = chatHistoryService.getChatHistory(user.employeeId);
       if (localHistory.length > 0) {
         setMessages(localHistory);
         console.log(`📚 Loaded ${localHistory.length} messages from localStorage`);
       } else {
-        // Nếu localStorage trống, load từ server (mock)
-        const result = await chatService.getChatHistory(user.employeeId);
-        if (result.success && result.data.length > 0) {
-          setMessages(result.data);
-          // Lưu vào localStorage để lần sau
-          chatHistoryService.saveMessages(user.employeeId, result.data);
-        }
+        console.log('📚 No local chat history found, starting with empty chat');
+        // Không gọi webhook tự động nữa để tránh trigger không mong muốn
+        setMessages([]);
       }
     } catch (error) {
       console.error('Error loading chat history:', error);
