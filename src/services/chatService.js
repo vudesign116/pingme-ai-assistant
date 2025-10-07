@@ -15,46 +15,11 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 export const chatService = {
   // Send message to AI
   async sendMessage(message, attachments = []) {
-    await delay(1500); // Simulate AI thinking time
-    
-    // Mock AI response based on message content
-    let response;
-    const lowerMessage = message.toLowerCase();
-    
-    if (lowerMessage.includes('xin chào') || lowerMessage.includes('hello')) {
-      response = 'Xin chào! Tôi là AI assistant của PingMe. Tôi có thể giúp gì cho bạn?';
-    } else if (lowerMessage.includes('cảm ơn')) {
-      response = 'Không có gì! Tôi luôn sẵn sàng hỗ trợ bạn.';
-    } else if (lowerMessage.includes('tạm biệt')) {
-      response = 'Tạm biệt! Hẹn gặp lại bạn sớm nhé!';
-    } else {
-      // Random response
-      response = MOCK_AI_RESPONSES[Math.floor(Math.random() * MOCK_AI_RESPONSES.length)];
-    }
-    
-    // Handle attachments
-    if (attachments.length > 0) {
-      const fileTypes = attachments.map(file => {
-        if (file.type.startsWith('image/')) return 'hình ảnh';
-        if (file.type.includes('pdf')) return 'PDF';
-        return 'file';
-      });
-      response += `\n\nTôi đã nhận được ${fileTypes.join(', ')} từ bạn. Tôi sẽ phân tích và phản hồi sớm nhất.`;
-    }
-    
-    const aiMessage = {
-      id: `msg-${Date.now()}`,
-      content: response,
-      timestamp: new Date().toISOString(),
-      sender: 'ai'
-    };
-    
-    // Send chat data to webhook
     try {
+      // Prepare chat data for webhook
       const chatData = {
         id: `chat-${Date.now()}`,
         userMessage: message,
-        aiResponse: response,
         attachments: attachments.map(file => ({
           name: file.name,
           type: file.type,
@@ -68,16 +33,77 @@ export const chatService = {
         }
       };
       
-      await webhookService.sendChatMessage(chatData);
+      // Try webhook with axios first
+      let webhookResult = await webhookService.sendChatMessage(chatData);
+      
+      // If axios fails, try with fetch as fallback
+      if (!webhookResult.success) {
+        console.warn('🔄 Axios failed, trying fetch method...');
+        webhookResult = await webhookService.testWithFetch(chatData);
+      }
+      
+      let aiResponse;
+      if (webhookResult.success && webhookResult.data && webhookResult.data.response) {
+        // Use response from webhook
+        aiResponse = webhookResult.data.response;
+        console.log('✅ AI Response received:', aiResponse);
+      } else {
+        // Fallback to mock response if webhook fails
+        console.warn('⚠️ Webhook failed or no response, using fallback');
+        console.warn('Webhook error:', webhookResult.error);
+        const lowerMessage = message.toLowerCase();
+        
+        if (lowerMessage.includes('xin chào') || lowerMessage.includes('hello')) {
+          aiResponse = 'Xin chào! Tôi là AI assistant của PingMe. Tôi có thể giúp gì cho bạn?';
+        } else if (lowerMessage.includes('cảm ơn')) {
+          aiResponse = 'Không có gì! Tôi luôn sẵn sàng hỗ trợ bạn.';
+        } else if (lowerMessage.includes('tạm biệt')) {
+          aiResponse = 'Tạm biệt! Hẹn gặp lại bạn sớm nhé!';
+        } else {
+          // Random response
+          aiResponse = MOCK_AI_RESPONSES[Math.floor(Math.random() * MOCK_AI_RESPONSES.length)];
+        }
+        
+        // Handle attachments for fallback
+        if (attachments.length > 0) {
+          const fileTypes = attachments.map(file => {
+            if (file.type.startsWith('image/')) return 'hình ảnh';
+            if (file.type.includes('pdf')) return 'PDF';
+            return 'file';
+          });
+          aiResponse += `\n\nTôi đã nhận được ${fileTypes.join(', ')} từ bạn. Tôi sẽ phân tích và phản hồi sớm nhất.`;
+        }
+      }
+      
+      const aiMessage = {
+        id: `msg-${Date.now()}`,
+        content: aiResponse,
+        timestamp: new Date().toISOString(),
+        sender: 'ai'
+      };
+      
+      return {
+        success: true,
+        data: aiMessage
+      };
+      
     } catch (error) {
-      console.error('Failed to send chat message to webhook:', error);
-      // Don't fail the chat if webhook fails
+      console.error('Error in sendMessage:', error);
+      
+      // Fallback error response
+      const errorMessage = {
+        id: `msg-${Date.now()}`,
+        content: 'Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại sau.',
+        timestamp: new Date().toISOString(),
+        sender: 'ai'
+      };
+      
+      return {
+        success: false,
+        data: errorMessage,
+        error: error.message
+      };
     }
-    
-    return {
-      success: true,
-      data: aiMessage
-    };
   },
 
   // Upload file (mock)

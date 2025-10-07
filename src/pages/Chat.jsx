@@ -8,10 +8,13 @@ import {
   User, 
   Bot,
   LogOut,
-  MoreVertical
+  MoreVertical,
+  Settings
 } from 'lucide-react';
 import { useChat } from '../hooks/useChat';
 import { setupIOSViewport } from '../utils/iosViewport';
+import WebhookDebugger from '../components/WebhookDebugger';
+import MarkdownMessage from '../components/MarkdownMessage';
 import './Chat.css';
 
 const Chat = ({ user, onLogout }) => {
@@ -19,6 +22,7 @@ const Chat = ({ user, onLogout }) => {
   const [attachments, setAttachments] = useState([]);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showWebhookDebugger, setShowWebhookDebugger] = useState(false);
   const [toast, setToast] = useState(null);
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
@@ -142,6 +146,16 @@ const Chat = ({ user, onLogout }) => {
           
           {showUserMenu && (
             <div className="user-menu">
+              <button 
+                onClick={() => {
+                  setShowWebhookDebugger(true);
+                  setShowUserMenu(false);
+                }} 
+                className="menu-item"
+              >
+                <Settings size={16} />
+                Webhook Debugger
+              </button>
               <button onClick={onLogout} className="menu-item logout">
                 <LogOut size={16} />
                 Đăng xuất
@@ -178,7 +192,10 @@ const Chat = ({ user, onLogout }) => {
                 
                 <div className="message-content">
                   <div className="message-bubble">
-                    <p>{message.content}</p>
+                    <MarkdownMessage 
+                      content={message.content} 
+                      sender={message.sender}
+                    />
                     
                     {message.attachments && message.attachments.length > 0 && (
                       <div className="message-attachments">
@@ -364,6 +381,12 @@ const Chat = ({ user, onLogout }) => {
           }}
         />
       </div>
+      
+      {/* Webhook Debugger */}
+      <WebhookDebugger 
+        isVisible={showWebhookDebugger}
+        onClose={() => setShowWebhookDebugger(false)}
+      />
     </div>
   );
 };

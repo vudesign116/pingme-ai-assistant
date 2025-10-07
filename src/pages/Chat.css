@@ -249,10 +249,24 @@
   color: #FF3B30;
 }
 
+/* Remove default p styling to let MarkdownMessage handle it */
 .message-bubble p {
   margin: 0;
   line-height: 1.4;
   font-size: 15px;
+}
+
+/* Override for markdown content in bubbles */
+.message-bubble .markdown-content {
+  font-size: 15px;
+}
+
+.message-bubble .markdown-content .markdown-p {
+  margin: 0 0 0.8em 0;
+}
+
+.message-bubble .markdown-content .markdown-p:last-child {
+  margin-bottom: 0;
 }
 
 .message-time {

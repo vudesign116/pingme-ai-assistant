@@ -40,7 +40,8 @@
 - **Error Boundary**: Graceful error handling
 - **Loading States**: Clear feedback during operations
 - **Offline Support**: Works without internet connection
-- **Webhook Integration**: Ready for backend integration
+- **Webhook Integration**: Full n8n webhook integration with AI responses
+- **Webhook Debugger**: Built-in tool for testing webhook connections
 - **TypeScript Ready**: Easy migration to TypeScript
 
 ## 🏗️ **Project Structure**
