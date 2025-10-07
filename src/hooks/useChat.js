@@ -61,8 +61,8 @@ export const useChat = (user) => {
     setLoading(true);
 
     try {
-      // Send to AI service
-      const result = await chatService.sendMessage(content, attachments);
+      // Send to AI service with userId
+      const result = await chatService.sendMessage(content, attachments, user.employeeId);
       
       if (result.success) {
         setMessages(prev => [...prev, result.data]);

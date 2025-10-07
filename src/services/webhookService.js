@@ -631,6 +631,72 @@ export const webhookService = {
     }
   },
 
+  // Get chat history from webhook
+  async getChatHistory(userId) {
+    try {
+      const user = JSON.parse(localStorage.getItem('userInfo') || '{}');
+      
+      const payload = {
+        action: 'getChatHistory',
+        method: 'GET',
+        timestamp: new Date().toISOString(),
+        userId: userId || user.employeeId,
+        userName: user.name,
+        data: {
+          userId: userId || user.employeeId,
+          limit: 100, // Limit số lượng tin nhắn
+          offset: 0
+        }
+      };
+
+      console.log('📚 Getting chat history for userId:', userId || user.employeeId);
+
+      // Try with axios first
+      try {
+        const response = await apiClient.post(WEBHOOK_URL, payload);
+        
+        if (response.data) {
+          console.log('✅ Chat history received from webhook');
+          return {
+            success: true,
+            data: response.data
+          };
+        }
+      } catch (axiosError) {
+        console.warn('⚠️ Axios failed for getChatHistory, trying fetch...');
+      }
+
+      // Fallback to fetch
+      const response = await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        mode: 'cors',
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Chat history received via fetch');
+        return {
+          success: true,
+          data: data
+        };
+      }
+
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+    } catch (error) {
+      console.error('❌ Failed to get chat history from webhook:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  },
+
   // Generic webhook call
   async sendCustomData(action, data) {
     try {

@@ -14,11 +14,17 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const chatService = {
   // Send message to AI
-  async sendMessage(message, attachments = []) {
+  async sendMessage(message, attachments = [], userId = null) {
     try {
+      // Get current user info
+      const user = JSON.parse(localStorage.getItem('userInfo') || '{}');
+      const currentUserId = userId || user.employeeId;
+      
       // Prepare chat data for webhook
       const chatData = {
         id: `chat-${Date.now()}`,
+        userId: currentUserId,
+        userName: user.name || 'Anonymous',
         userMessage: message,
         attachments: attachments.map(file => ({
           name: file.name,
@@ -29,9 +35,12 @@ export const chatService = {
         context: {
           messageLength: message.length,
           hasAttachments: attachments.length > 0,
-          attachmentCount: attachments.length
+          attachmentCount: attachments.length,
+          userId: currentUserId
         }
       };
+      
+      console.log('📤 Sending message for userId:', currentUserId);
       
       // Try webhook with axios first
       let webhookResult = await webhookService.sendChatMessage(chatData);
@@ -140,21 +149,65 @@ export const chatService = {
     };
   },
 
-  // Get chat history (mock)
+  // Get chat history from webhook or fallback to mock
   async getChatHistory(userId) {
-    await delay(500);
-    
-    // Mock chat history
-    return {
-      success: true,
-      data: [
-        {
-          id: 'msg-1',
-          content: 'Xin chào! Tôi là AI assistant của PingMe. Tôi có thể giúp gì cho bạn?',
-          timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-          sender: 'ai'
+    try {
+      console.log('📚 Getting chat history for userId:', userId);
+      
+      // Try to get from webhook first
+      const webhookResult = await webhookService.getChatHistory(userId);
+      
+      if (webhookResult.success && webhookResult.data) {
+        console.log('✅ Chat history loaded from webhook');
+        
+        // Format data if needed (webhook might return different format)
+        let historyData = webhookResult.data;
+        
+        // If webhook returns an array of messages directly
+        if (Array.isArray(historyData)) {
+          return {
+            success: true,
+            data: historyData
+          };
         }
-      ]
-    };
+        
+        // If webhook returns object with messages array
+        if (historyData.messages && Array.isArray(historyData.messages)) {
+          return {
+            success: true,
+            data: historyData.messages
+          };
+        }
+        
+        // If webhook returns something else, try to extract messages
+        console.warn('⚠️ Unexpected webhook response format:', historyData);
+      }
+      
+      // Fallback to mock data if webhook fails
+      console.warn('⚠️ Webhook failed, using mock chat history');
+      await delay(500);
+      
+      return {
+        success: true,
+        data: [
+          {
+            id: 'msg-1',
+            content: 'Xin chào! Tôi là AI assistant của PingMe. Tôi có thể giúp gì cho bạn?',
+            timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+            sender: 'ai'
+          }
+        ]
+      };
+      
+    } catch (error) {
+      console.error('❌ Error getting chat history:', error);
+      
+      // Return empty history on error
+      return {
+        success: false,
+        data: [],
+        error: error.message
+      };
+    }
   }
 };
