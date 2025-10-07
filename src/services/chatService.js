@@ -336,18 +336,9 @@ export const chatService = {
       isSupported: processingStrategy.supportedByAI
     };
     
-    // Send file upload info to webhook (optional - don't fail if webhook can't handle it)
-    try {
-      const webhookResult = await webhookService.sendFileUpload(fileData);
-      if (webhookResult.success) {
-        console.log('✅ File upload info sent to webhook successfully');
-      } else {
-        console.warn('⚠️ Webhook could not process file upload:', webhookResult.error);
-      }
-    } catch (error) {
-      console.warn('⚠️ Webhook not available for file uploads:', error.message);
-      // Continue with local file handling - don't fail the upload
-    }
+    // Note: File data will be sent to webhook when user sends a message with attachments
+    // No need to trigger webhook just for file upload/attachment
+    console.log(`📎 File processed and ready: ${file.name} (${processingStrategy.description})`);
     
     return {
       success: true,
