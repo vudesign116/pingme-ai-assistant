@@ -12,6 +12,45 @@ const MOCK_AI_RESPONSES = [
 // Simulate API delay
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Check webhook health
+const checkWebhookHealth = async () => {
+  try {
+    const testPayload = {
+      action: 'health_check',
+      timestamp: new Date().toISOString(),
+      test: true
+    };
+    
+    const response = await fetch('https://kpspa.app.n8n.cloud/webhook-test/e9bbd901-ec61-424a-963f-8b63a7f9b17d', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      mode: 'cors',
+      body: JSON.stringify(testPayload)
+    });
+    
+    if (response.status === 400) {
+      const errorText = await response.text();
+      if (errorText.includes('ip not local')) {
+        console.warn('🚫 Webhook health check: IP restriction detected');
+        return { healthy: false, reason: 'IP_BLOCKED', details: errorText };
+      }
+    }
+    
+    return { 
+      healthy: response.ok, 
+      status: response.status, 
+      reason: response.ok ? 'OK' : 'HTTP_ERROR',
+      details: response.statusText 
+    };
+  } catch (error) {
+    console.error('❌ Webhook health check failed:', error);
+    return { healthy: false, reason: 'NETWORK_ERROR', details: error.message };
+  }
+};
+
 export const chatService = {
   // Send message to AI
   async sendMessage(message, attachments = [], userId = null) {
@@ -48,7 +87,14 @@ export const chatService = {
       // If axios fails, try with fetch as fallback
       if (!webhookResult.success) {
         console.warn('🔄 Axios failed, trying fetch method...');
-        webhookResult = await webhookService.testWithFetch(chatData);
+        
+        // Check if it's an IP restriction error
+        if (webhookResult.error && webhookResult.error.includes('IP restriction')) {
+          console.warn('🚫 IP restriction detected, skipping fetch fallback and using mock response');
+          webhookResult = { success: false, error: 'IP_BLOCKED' };
+        } else {
+          webhookResult = await webhookService.testWithFetch(chatData);
+        }
       }
       
       let aiResponse;
@@ -60,9 +106,20 @@ export const chatService = {
         // Fallback to mock response if webhook fails
         console.warn('⚠️ Webhook failed or no response, using fallback');
         console.warn('Webhook error:', webhookResult.error);
+        
         const lowerMessage = message.toLowerCase();
         
-        if (lowerMessage.includes('xin chào') || lowerMessage.includes('hello')) {
+        // Check if it's an IP restriction error
+        if (webhookResult.error === 'IP_BLOCKED' || (webhookResult.error && webhookResult.error.includes('IP restriction'))) {
+          aiResponse = '🚫 **Kết nối webhook bị hạn chế IP**\n\n' +
+                      'Hiện tại n8n webhook đang chặn truy cập từ IP address này. ' +
+                      'Đây là chế độ bảo mật của n8n cloud.\n\n' +
+                      '**Giải pháp:**\n' +
+                      '• Sử dụng VPN với IP được phép\n' +
+                      '• Cấu hình IP whitelist trong n8n\n' +
+                      '• Triển khai proxy server\n\n' +
+                      '_Hiện đang sử dụng chế độ offline với mock responses._';
+        } else if (lowerMessage.includes('xin chào') || lowerMessage.includes('hello')) {
           aiResponse = 'Xin chào! Tôi là AI assistant của PingMe. Tôi có thể giúp gì cho bạn?';
         } else if (lowerMessage.includes('cảm ơn')) {
           aiResponse = 'Không có gì! Tôi luôn sẵn sàng hỗ trợ bạn.';
@@ -209,5 +266,10 @@ export const chatService = {
         error: error.message
       };
     }
+  },
+
+  // Check webhook health status
+  async checkWebhookHealth() {
+    return await checkWebhookHealth();
   }
 };

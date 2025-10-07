@@ -180,7 +180,16 @@ export const webhookService = {
       
       // Check if response is successful
       if (response.status >= 400) {
-        throw new Error(`Webhook returned status ${response.status}: ${response.statusText}`);
+        const errorText = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+        
+        // Handle specific "ip not local" error
+        if (errorText.includes('ip not local')) {
+          console.warn('🚫 n8n webhook blocked IP - not local/allowed IP address');
+          console.warn('💡 This might be due to n8n cloud IP restrictions');
+          throw new Error('Webhook IP restriction: Access denied from current IP address');
+        }
+        
+        throw new Error(`Webhook returned status ${response.status}: ${response.statusText}${errorText ? ' - ' + errorText : ''}`);
       }
       
       // Process the response from n8n webhook
@@ -471,7 +480,23 @@ export const webhookService = {
       console.log('📊 Fetch response ok:', response.ok);
       
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        // Try to read error response body
+        let errorText = '';
+        try {
+          errorText = await response.text();
+          console.log('❌ Error response body:', errorText);
+          
+          // Handle specific "ip not local" error
+          if (errorText.includes('ip not local')) {
+            console.warn('🚫 n8n webhook blocked IP via fetch - not local/allowed IP address');
+            console.warn('💡 Consider using a proxy server or VPN with allowed IP');
+            throw new Error('Webhook IP restriction: Access denied from current IP address (fetch)');
+          }
+        } catch (readError) {
+          console.warn('Could not read error response body:', readError);
+        }
+        
+        throw new Error(`HTTP ${response.status}: ${response.statusText}${errorText ? ' - ' + errorText : ''}`);
       }
       
       const data = await response.json();
@@ -686,7 +711,22 @@ export const webhookService = {
         };
       }
 
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      // Handle error responses, especially IP restrictions
+      let errorText = '';
+      try {
+        errorText = await response.text();
+        console.log('❌ getChatHistory error response:', errorText);
+        
+        // Handle specific "ip not local" error
+        if (errorText.includes('ip not local')) {
+          console.warn('🚫 n8n webhook blocked IP for getChatHistory - not local/allowed IP address');
+          throw new Error('Webhook IP restriction: Cannot access chat history from current IP address');
+        }
+      } catch (readError) {
+        console.warn('Could not read getChatHistory error response:', readError);
+      }
+
+      throw new Error(`HTTP ${response.status}: ${response.statusText}${errorText ? ' - ' + errorText : ''}`);
 
     } catch (error) {
       console.error('❌ Failed to get chat history from webhook:', error);

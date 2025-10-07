@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Wifi, WifiOff, Activity } from 'lucide-react';
 
 const WebhookStatus = () => {
-  const [status, setStatus] = useState('checking'); // checking, online, offline
+  const [status, setStatus] = useState('checking'); // checking, online, offline, ip_blocked
   const [lastSent, setLastSent] = useState(null);
 
   useEffect(() => {
@@ -35,6 +35,15 @@ const WebhookStatus = () => {
       if (response.ok) {
         setStatus('online');
         setLastSent(new Date());
+      } else if (response.status === 400) {
+        // Check if it's IP restriction
+        const errorText = await response.text();
+        if (errorText.includes('ip not local')) {
+          console.warn('🚫 IP restriction detected in webhook status check');
+          setStatus('ip_blocked');
+        } else {
+          setStatus('offline');
+        }
       } else {
         setStatus('offline');
       }
@@ -48,6 +57,7 @@ const WebhookStatus = () => {
     switch (status) {
       case 'online': return '#34C759';
       case 'offline': return '#FF3B30';
+      case 'ip_blocked': return '#FF9500';
       default: return '#FF9500';
     }
   };
@@ -56,6 +66,7 @@ const WebhookStatus = () => {
     switch (status) {
       case 'online': return 'Webhook Online';
       case 'offline': return 'Webhook Offline';
+      case 'ip_blocked': return 'IP Blocked (Mock Mode)';
       default: return 'Checking...';
     }
   };
@@ -64,6 +75,7 @@ const WebhookStatus = () => {
     switch (status) {
       case 'online': return <Wifi size={12} />;
       case 'offline': return <WifiOff size={12} />;
+      case 'ip_blocked': return <Activity size={12} style={{ color: '#FF9500' }} />;
       default: return <Activity size={12} />;
     }
   };
