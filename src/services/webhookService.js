@@ -57,9 +57,16 @@ apiClient.interceptors.response.use(
 
 // Helper function to get webhook URL
 const getWebhookUrl = () => {
-  // Temporarily force direct URL for debugging
-  // return window.location.hostname === 'localhost' ? PROXY_WEBHOOK_URL : WEBHOOK_URL;
-  return WEBHOOK_URL; // Force direct URL to bypass proxy issues
+  // Use proxy for localhost to avoid CORS issues
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  
+  if (isLocalhost) {
+    console.log('🔧 Using proxy URL for localhost to avoid CORS');
+    return PROXY_WEBHOOK_URL;
+  } else {
+    console.log('🌐 Using direct webhook URL for production');
+    return WEBHOOK_URL;
+  }
 };
 
 // Helper function to format and clean AI response text
