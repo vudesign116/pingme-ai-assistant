@@ -52,6 +52,20 @@ const checkWebhookHealth = async () => {
 };
 
 export const chatService = {
+  // Helper function to convert file to base64
+  convertFileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        // Remove the data:image/jpeg;base64, prefix to get just the base64 string
+        const base64String = reader.result.split(',')[1];
+        resolve(base64String);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  },
+
   // Send message to AI
   async sendMessage(message, attachments = [], userId = null) {
     try {
@@ -68,7 +82,10 @@ export const chatService = {
         attachments: attachments.map(file => ({
           name: file.name,
           type: file.type,
-          size: file.size
+          size: file.size,
+          base64: file.base64, // For AI vision processing
+          mimeType: file.mimeType, // For AI vision processing
+          isImage: file.isImage // Flag for image processing
         })),
         sessionId: localStorage.getItem('sessionId') || `session-${Date.now()}`,
         context: {
@@ -176,7 +193,7 @@ export const chatService = {
     }
   },
 
-  // Upload file (mock)
+  // Upload file with AI vision support
   async uploadFile(file) {
     await delay(500);
     
@@ -188,12 +205,29 @@ export const chatService = {
       };
     }
     
+    // Convert image to base64 for AI processing
+    let base64Data = null;
+    let mimeType = null;
+    
+    if (file.type.startsWith('image/')) {
+      try {
+        base64Data = await this.convertFileToBase64(file);
+        mimeType = file.type;
+        console.log('🖼️ Image converted to base64 for AI processing');
+      } catch (error) {
+        console.error('Failed to convert image to base64:', error);
+      }
+    }
+    
     const fileData = {
       id: `file-${Date.now()}`,
       name: file.name,
       size: file.size,
       type: file.type,
-      url: URL.createObjectURL(file) // For preview
+      url: URL.createObjectURL(file), // For preview
+      base64: base64Data, // For AI processing
+      mimeType: mimeType, // For AI processing
+      isImage: file.type.startsWith('image/')
     };
     
     // Send file upload info to webhook (optional - don't fail if webhook can't handle it)

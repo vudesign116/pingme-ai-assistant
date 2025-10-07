@@ -174,7 +174,28 @@ export const webhookService = {
       };
 
       const webhookUrl = getWebhookUrl();
-      console.log('🚀 Sending to webhook:', webhookUrl, payload);
+      
+      // Log image attachments for debugging
+      const imageAttachments = payload.data.attachments.filter(att => att.isImage);
+      if (imageAttachments.length > 0) {
+        console.log('�️ Sending images to webhook:', imageAttachments.map(img => ({
+          name: img.name,
+          type: img.type,
+          size: img.size,
+          hasBase64: !!img.base64,
+          base64Length: img.base64 ? img.base64.length : 0
+        })));
+      }
+      
+      console.log('�🚀 Sending to webhook:', webhookUrl, {
+        ...payload,
+        data: {
+          ...payload.data,
+          attachments: payload.data.attachments.map(att => att.isImage ? 
+            { ...att, base64: `[BASE64_DATA_${att.base64?.length || 0}_CHARS]` } : att
+          )
+        }
+      });
       
       const response = await apiClient.post(webhookUrl, payload);
       
