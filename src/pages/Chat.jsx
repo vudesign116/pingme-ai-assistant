@@ -234,17 +234,26 @@ const Chat = ({ user, onLogout }) => {
                                 className="attachment-image"
                                 onError={(e) => {
                                   console.warn(`Failed to load image: ${file.name}`);
+                                  // Hide the failed image
                                   e.target.style.display = 'none';
-                                  e.target.nextSibling.style.display = 'flex';
+                                  // Show fallback file icon by updating parent
+                                  const parent = e.target.parentElement;
+                                  if (parent) {
+                                    const fallback = parent.querySelector('.attachment-file');
+                                    if (fallback) {
+                                      fallback.style.display = 'flex';
+                                    }
+                                  }
                                 }}
                               />
                             ) : null}
-                            {(!file.type.startsWith('image/') || !file.url) && (
-                              <div className="attachment-file">
-                                <File size={16} />
-                                <span>{file.name}</span>
-                              </div>
-                            )}
+                            <div 
+                              className="attachment-file" 
+                              style={{ display: file.type.startsWith('image/') && file.url ? 'none' : 'flex' }}
+                            >
+                              <File size={16} />
+                              <span>{file.name}</span>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -296,18 +305,26 @@ const Chat = ({ user, onLogout }) => {
                       console.warn(`Failed to load thumbnail: ${file.name}`);
                       // Hide image and show file icon instead
                       e.target.style.display = 'none';
+                      const parent = e.target.parentElement;
+                      if (parent) {
+                        const fallback = parent.querySelector('.file-attachment');
+                        if (fallback) {
+                          fallback.style.display = 'flex';
+                        }
+                      }
                     }}
                   />
                 ) : null}
-                {(!file.type.startsWith('image/') || !file.url) && (
-                  <div className="file-attachment">
-                    <File size={16} />
-                    <div className="file-info">
-                      <span className="file-name">{file.name}</span>
-                      <span className="file-size">{formatFileSize(file.size)}</span>
-                    </div>
+                <div 
+                  className="file-attachment"
+                  style={{ display: file.type.startsWith('image/') && file.url ? 'none' : 'flex' }}
+                >
+                  <File size={16} />
+                  <div className="file-info">
+                    <span className="file-name">{file.name}</span>
+                    <span className="file-size">{formatFileSize(file.size)}</span>
                   </div>
-                )}
+                </div>
                 <button 
                   className="remove-attachment"
                   onClick={() => removeAttachment(file.id)}
