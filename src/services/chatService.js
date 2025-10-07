@@ -57,13 +57,79 @@ export const chatService = {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => {
-        // Remove the data:image/jpeg;base64, prefix to get just the base64 string
+        // Remove the data:mime/type;base64, prefix to get just the base64 string
         const base64String = reader.result.split(',')[1];
         resolve(base64String);
       };
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
+  },
+
+  // Helper function to extract text from text files  
+  convertFileToText(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        resolve(reader.result);
+      };
+      reader.onerror = reject;
+      reader.readAsText(file, 'UTF-8');
+    });
+  },
+
+  // Get file processing strategy for AI
+  getFileProcessingStrategy(file) {
+    const fileType = file.type.toLowerCase();
+    const fileName = file.name.toLowerCase();
+    
+    // Images - convert to base64 for vision processing
+    if (fileType.startsWith('image/')) {
+      return {
+        strategy: 'vision',
+        supportedByAI: true,
+        processing: 'base64',
+        description: 'Image for AI vision analysis'
+      };
+    }
+    
+    // Text files - extract content
+    if (fileType.startsWith('text/') || 
+        fileName.endsWith('.txt') || 
+        fileName.endsWith('.md') || 
+        fileName.endsWith('.csv') ||
+        fileName.endsWith('.json') ||
+        fileName.endsWith('.xml')) {
+      return {
+        strategy: 'text',
+        supportedByAI: true,
+        processing: 'text_content',
+        description: 'Text content for AI analysis'
+      };
+    }
+    
+    // Code files - extract content
+    if (fileName.endsWith('.js') || fileName.endsWith('.jsx') ||
+        fileName.endsWith('.ts') || fileName.endsWith('.tsx') ||
+        fileName.endsWith('.py') || fileName.endsWith('.java') ||
+        fileName.endsWith('.cpp') || fileName.endsWith('.c') ||
+        fileName.endsWith('.css') || fileName.endsWith('.html')) {
+      return {
+        strategy: 'code',
+        supportedByAI: true,
+        processing: 'text_content',
+        description: 'Code file for AI analysis'
+      };
+    }
+    
+    // Default - metadata only
+    return {
+      strategy: 'unknown',
+      supportedByAI: false,
+      processing: 'metadata',
+      description: 'File type not directly supported',
+      note: 'Only metadata will be sent to AI'
+    };
   },
 
   // Send message to AI
@@ -80,12 +146,24 @@ export const chatService = {
         userName: user.name || 'Anonymous',
         userMessage: message,
         attachments: attachments.map(file => ({
+          // Basic file info
           name: file.name,
           type: file.type,
           size: file.size,
-          base64: file.base64, // For AI vision processing
-          mimeType: file.mimeType, // For AI vision processing
-          isImage: file.isImage // Flag for image processing
+          
+          // AI processing data
+          processedData: file.processedData,
+          processingStrategy: file.processingStrategy,
+          isSupported: file.isSupported,
+          
+          // Legacy compatibility
+          base64: file.base64,
+          mimeType: file.mimeType,
+          isImage: file.isImage,
+          isText: file.isText,
+          
+          // Error handling
+          processingError: file.processingError
         })),
         sessionId: localStorage.getItem('sessionId') || `session-${Date.now()}`,
         context: {
@@ -193,7 +271,7 @@ export const chatService = {
     }
   },
 
-  // Upload file with AI vision support
+  // Upload file with comprehensive AI processing support
   async uploadFile(file) {
     await delay(500);
     
@@ -205,18 +283,37 @@ export const chatService = {
       };
     }
     
-    // Convert image to base64 for AI processing
-    let base64Data = null;
-    let mimeType = null;
+    // Determine processing strategy
+    const processingStrategy = this.getFileProcessingStrategy(file);
+    console.log(`📁 Processing file: ${file.name}`, processingStrategy);
     
-    if (file.type.startsWith('image/')) {
-      try {
-        base64Data = await this.convertFileToBase64(file);
-        mimeType = file.type;
-        console.log('🖼️ Image converted to base64 for AI processing');
-      } catch (error) {
-        console.error('Failed to convert image to base64:', error);
+    let processedData = null;
+    let processingError = null;
+    
+    try {
+      switch (processingStrategy.processing) {
+        case 'base64':
+          // For images and binary files
+          processedData = await this.convertFileToBase64(file);
+          console.log(`🖼️ ${processingStrategy.description} - converted to base64 (${processedData.length} chars)`);
+          break;
+          
+        case 'text_content':
+          // For text files and code files
+          processedData = await this.convertFileToText(file);
+          console.log(`� ${processingStrategy.description} - extracted text (${processedData.length} chars)`);
+          break;
+          
+        case 'metadata':
+        default:
+          // For unsupported files
+          processedData = null;
+          console.log(`📋 ${processingStrategy.description} - metadata only`);
+          break;
       }
+    } catch (error) {
+      console.error(`❌ Failed to process file ${file.name}:`, error);
+      processingError = error.message;
     }
     
     const fileData = {
@@ -225,9 +322,18 @@ export const chatService = {
       size: file.size,
       type: file.type,
       url: URL.createObjectURL(file), // For preview
-      base64: base64Data, // For AI processing
-      mimeType: mimeType, // For AI processing
-      isImage: file.type.startsWith('image/')
+      
+      // AI processing data
+      processedData: processedData,
+      processingStrategy: processingStrategy,
+      processingError: processingError,
+      
+      // Legacy support
+      base64: processingStrategy.processing === 'base64' ? processedData : null,
+      mimeType: file.type,
+      isImage: file.type.startsWith('image/'),
+      isText: processingStrategy.strategy === 'text' || processingStrategy.strategy === 'code',
+      isSupported: processingStrategy.supportedByAI
     };
     
     // Send file upload info to webhook (optional - don't fail if webhook can't handle it)
