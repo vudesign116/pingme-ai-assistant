@@ -173,8 +173,8 @@ export const webhookService = {
           messageId: messageData.id,
           userId: user.employeeId,
           userName: user.name,
-          userMessage: messageData.userMessage,
-          attachments: messageData.attachments || [],
+          userMessage: messageData.message || messageData.userMessage,
+          attachments: messageData.files || messageData.attachments || [],
           sessionId: messageData.sessionId || `session-${Date.now()}`,
           conversationContext: messageData.context || {}
         }
