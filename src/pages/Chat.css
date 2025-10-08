@@ -275,6 +275,9 @@
   border: 1px solid #90CAF9;
   position: relative;
   overflow: hidden;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
 }
 
 .message.loading .message-bubble::before {
@@ -294,6 +297,9 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 1.4;
 }
 
 .message.loading .message-content::after {
@@ -303,6 +309,7 @@
   border-radius: 50%;
   background: #1976D2;
   animation: pulse 1s infinite;
+  flex-shrink: 0;
 }
 
 @keyframes shimmer {
@@ -313,6 +320,19 @@
 @keyframes pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+/* Mobile responsive loading message */
+@media (max-width: 480px) {
+  .message.loading .message-content {
+    font-size: 13px;
+    gap: 6px;
+  }
+  
+  .message.loading .message-content::after {
+    width: 6px;
+    height: 6px;
+  }
 }
 
 .message-time {

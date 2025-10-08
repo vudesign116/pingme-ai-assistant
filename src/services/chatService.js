@@ -151,7 +151,7 @@ export const chatService = {
 
       // Show initial loading message
       if (onProgressUpdate) {
-        onProgressUpdate('� Đang xử lý yêu cầu của bạn...');
+        onProgressUpdate('🔍 Đang xử lý...');
       }
 
       // Send to webhook with enhanced error handling and progress tracking
@@ -160,13 +160,13 @@ export const chatService = {
       // Set up progress updates
       const progressTimer = setTimeout(() => {
         if (onProgressUpdate) {
-          onProgressUpdate('🤖 AI đang phân tích và tìm kiếm thông tin, vui lòng chờ một chút...');
+          onProgressUpdate('🤖 AI đang phân tích...');
         }
       }, 3000); // After 3 seconds
       
       const longProgressTimer = setTimeout(() => {
         if (onProgressUpdate) {
-          onProgressUpdate('⏳ Yêu cầu phức tạp đang được xử lý, xin hãy kiên nhẫn...');
+          onProgressUpdate('⏳ Đang xử lý phức tạp...');
         }
       }, 8000); // After 8 seconds
 

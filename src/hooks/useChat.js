@@ -60,7 +60,7 @@ export const useChat = (user) => {
     const loadingMessageId = `loading-${Date.now()}`;
     const loadingMessage = {
       id: loadingMessageId,
-      content: '🔍 Đang xử lý yêu cầu của bạn...',
+      content: '🔍 Đang xử lý...',
       timestamp: new Date().toISOString(),
       sender: 'ai',
       isLoading: true
