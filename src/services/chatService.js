@@ -200,17 +200,51 @@ export const chatService = {
       }
 
       let aiResponse;
-      if (webhookResult.success && webhookResult.data && webhookResult.data.response) {
-        // Use response from webhook
-        aiResponse = webhookResult.data.response;
-        console.log('✅ AI Response received:', aiResponse);
-      } else {
-        // Fallback to mock response if webhook fails
+      if (webhookResult.success && webhookResult.data) {
+        // Try multiple response formats from webhook
+        if (webhookResult.data.response) {
+          aiResponse = webhookResult.data.response;
+          console.log('✅ AI Response received (data.response):', aiResponse);
+        } else if (webhookResult.data.message) {
+          aiResponse = webhookResult.data.message;
+          console.log('✅ AI Response received (data.message):', aiResponse);
+        } else if (typeof webhookResult.data === 'string') {
+          aiResponse = webhookResult.data;
+          console.log('✅ AI Response received (string data):', aiResponse);
+        } else if (webhookResult.data.text) {
+          aiResponse = webhookResult.data.text;
+          console.log('✅ AI Response received (data.text):', aiResponse);
+        } else {
+          // Try to extract any text content from the response
+          console.warn('⚠️ No standard AI response found, trying to extract any text content...');
+          const responseStr = JSON.stringify(webhookResult.data);
+          console.log('📝 Full webhook response data:', webhookResult.data);
+          
+          // Look for common AI response patterns
+          const textFields = ['content', 'answer', 'result', 'output'];
+          for (const field of textFields) {
+            if (webhookResult.data[field] && typeof webhookResult.data[field] === 'string') {
+              aiResponse = webhookResult.data[field];
+              console.log(`✅ AI Response found in data.${field}:`, aiResponse);
+              break;
+            }
+          }
+          
+          if (!aiResponse) {
+            console.warn('⚠️ Could not extract AI response from webhook data, using fallback');
+            aiResponse = null; // Will trigger fallback
+          }
+        }
+      }
+      
+      if (!aiResponse) {
+        // Fallback to mock response if webhook fails or no response found
         console.warn('⚠️ Webhook failed or no response, using fallback');
         console.warn('Webhook error details:', {
           error: webhookResult.error || 'Unknown error',
           success: webhookResult.success,
-          details: webhookResult.details
+          details: webhookResult.details,
+          fullData: webhookResult.data
         });
         
         const lowerMessage = message.toLowerCase();
