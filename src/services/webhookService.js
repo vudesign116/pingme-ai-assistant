@@ -1,18 +1,7 @@
 import axios from 'axios';
 
-// Webhook URL - Test version// Helper function to get webhook URL
-const getWebhookUrl = () => {
-  // Use proxy for localhost to avoid CORS issues
-  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-  
-  if (isLocalhost) {
-    console.log('🧪 Using proxy URL for localhost (TEST mode)');
-    return PROXY_WEBHOOK_URL;
-  } else {
-    console.log('🧪 Using direct webhook URL (TEST mode)');
-    return WEBHOOK_URL;  
-  }
-};K_URL = 'https://kpspa.app.n8n.cloud/webhook-test/e9bbd901-ec61-424a-963f-8b63a7f9b17d';
+// Webhook URL - Test version
+const WEBHOOK_URL = 'https://kpspa.app.n8n.cloud/webhook-test/e9bbd901-ec61-424a-963f-8b63a7f9b17d';
 const PROXY_WEBHOOK_URL = '/api/webhook-test'; // Use proxy to avoid CORS in development
 
 // Create axios instance with default config
@@ -66,9 +55,19 @@ apiClient.interceptors.response.use(
   }
 );
 
-
-
-
+// Helper function to get webhook URL
+const getWebhookUrl = () => {
+  // Use proxy for localhost to avoid CORS issues
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  
+  if (isLocalhost) {
+    console.log('🧪 Using proxy URL for localhost (TEST mode)');
+    return PROXY_WEBHOOK_URL;
+  } else {
+    console.log('🧪 Using direct webhook URL (TEST mode)');
+    return WEBHOOK_URL;  
+  }
+};
 
 // Helper function to format and clean AI response text
 const formatAIResponse = (text) => {
