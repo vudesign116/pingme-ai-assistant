@@ -71,13 +71,6 @@ const Chat = ({ user, onLogout }) => {
   const handleSendMessage = async () => {
     // Don't send empty messages
     if (!inputMessage.trim() && attachments.length === 0) return;
-    
-    // Validate: Images must be sent with text
-    const hasImages = attachments.some(file => file.type.startsWith('image/'));
-    if (hasImages && !inputMessage.trim()) {
-      showToast('Vui lòng nhập văn bản kèm theo hình ảnh', 'error');
-      return;
-    }
 
     await sendMessage(inputMessage, attachments);
     setInputMessage('');
@@ -199,6 +192,8 @@ const Chat = ({ user, onLogout }) => {
         </div>
       </div>
 
+
+
       {/* Messages */}
       <div className="messages-container">
         {messages.length === 0 ? (
@@ -214,7 +209,7 @@ const Chat = ({ user, onLogout }) => {
             {messages.map((message) => (
               <div 
                 key={message.id} 
-                className={`message ${message.sender === 'user' ? 'user-message' : 'ai-message'} ${message.isError ? 'error-message' : ''}`}
+                className={`message ${message.sender === 'user' ? 'user-message' : 'ai-message'} ${message.isError ? 'error-message' : ''} ${message.isLoading ? 'loading' : ''}`}
               >
                 <div className="message-avatar">
                   {message.sender === 'user' ? (
@@ -393,11 +388,7 @@ const Chat = ({ user, onLogout }) => {
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder={
-              attachments.some(file => file.type.startsWith('image/')) 
-                ? "Nhập mô tả cho hình ảnh..." 
-                : "Nhập tin nhắn..."
-            }
+            placeholder="Nhập tin nhắn..."
             className="message-input"
             rows={1}
             disabled={loading}
@@ -408,8 +399,7 @@ const Chat = ({ user, onLogout }) => {
             onClick={handleSendMessage}
             disabled={
               loading || 
-              (!inputMessage.trim() && attachments.length === 0) ||
-              (attachments.some(file => file.type.startsWith('image/')) && !inputMessage.trim())
+              (!inputMessage.trim() && attachments.length === 0)
             }
           >
             {loading ? (

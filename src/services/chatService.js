@@ -133,54 +133,61 @@ export const chatService = {
   },
 
   // Send message to AI
-  async sendMessage(message, attachments = [], userId = null) {
+  async sendMessage(message, files = [], conversationHistory = [], onProgressUpdate = null) {
+    console.log('📤 Sending message:', message);
+    
     try {
-      // Get current user info
-      const user = JSON.parse(localStorage.getItem('userInfo') || '{}');
-      const currentUserId = userId || user.employeeId;
-      
-      // Prepare chat data for webhook
+      // Create chat data with proper structure for AI processing
       const chatData = {
-        id: `chat-${Date.now()}`,
-        userId: currentUserId,
-        userName: user.name || 'Anonymous',
-        userMessage: message,
-        attachments: attachments.map(file => ({
-          // Basic file info
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          
-          // AI processing data
-          processedData: file.processedData,
-          processingStrategy: file.processingStrategy,
-          isSupported: file.isSupported,
-          
-          // Legacy compatibility
-          base64: file.base64,
-          mimeType: file.mimeType,
-          isImage: file.isImage,
-          isText: file.isText,
-          
-          // Error handling
-          processingError: file.processingError
-        })),
-        sessionId: localStorage.getItem('sessionId') || `session-${Date.now()}`,
-        context: {
-          messageLength: message.length,
-          hasAttachments: attachments.length > 0,
-          attachmentCount: attachments.length,
-          userId: currentUserId
-        }
+        message: message,
+        files: files,
+        conversationHistory: conversationHistory,
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        sessionId: Date.now().toString()
       };
+
+      console.log('� Chat data prepared:', chatData);
+
+      // Show initial loading message
+      if (onProgressUpdate) {
+        onProgressUpdate('� Đang xử lý yêu cầu của bạn...');
+      }
+
+      // Send to webhook with enhanced error handling and progress tracking
+      const webhookPromise = webhookService.sendChatMessage(chatData);
       
-      console.log('📤 Sending message for userId:', currentUserId);
+      // Set up progress updates
+      const progressTimer = setTimeout(() => {
+        if (onProgressUpdate) {
+          onProgressUpdate('🤖 AI đang phân tích và tìm kiếm thông tin, vui lòng chờ một chút...');
+        }
+      }, 3000); // After 3 seconds
       
-      // Try webhook with axios first
-      let webhookResult = await webhookService.sendChatMessage(chatData);
+      const longProgressTimer = setTimeout(() => {
+        if (onProgressUpdate) {
+          onProgressUpdate('⏳ Yêu cầu phức tạp đang được xử lý, xin hãy kiên nhẫn...');
+        }
+      }, 8000); // After 8 seconds
+
+      let webhookResult;
+      try {
+        webhookResult = await webhookPromise;
+        clearTimeout(progressTimer);
+        clearTimeout(longProgressTimer);
+      } catch (error) {
+        clearTimeout(progressTimer);
+        clearTimeout(longProgressTimer);
+        throw error;
+      }
       
+      // Continue with existing logic
       // If axios fails, try with fetch as fallback
       if (!webhookResult.success) {
+        if (onProgressUpdate) {
+          onProgressUpdate('🔄 Đang thử phương pháp kết nối khác...');
+        }
+        
         console.warn('🔄 Axios failed, trying fetch method...');
         
         // Check if it's an IP restriction error
@@ -191,7 +198,7 @@ export const chatService = {
           webhookResult = await webhookService.testWithFetch(chatData);
         }
       }
-      
+
       let aiResponse;
       if (webhookResult.success && webhookResult.data && webhookResult.data.response) {
         // Use response from webhook
@@ -219,54 +226,48 @@ export const chatService = {
                       '• Triển khai proxy server\n\n' +
                       '_Hiện đang sử dụng chế độ offline với mock responses._';
         } else if (lowerMessage.includes('xin chào') || lowerMessage.includes('hello')) {
-          aiResponse = 'Xin chào! Tôi là AI assistant của PingMe. Tôi có thể giúp gì cho bạn?';
-        } else if (lowerMessage.includes('cảm ơn')) {
-          aiResponse = 'Không có gì! Tôi luôn sẵn sàng hỗ trợ bạn.';
-        } else if (lowerMessage.includes('tạm biệt')) {
-          aiResponse = 'Tạm biệt! Hẹn gặp lại bạn sớm nhé!';
+          aiResponse = '👋 **Xin chào!** Tôi là AI Assistant của PingMe.\n\n' +
+                      'Tôi có thể giúp bạn:\n' +
+                      '• Trả lời câu hỏi\n' +
+                      '• Phân tích hình ảnh và tài liệu\n' +
+                      '• Xử lý file văn bản và code\n' +
+                      '• Hỗ trợ công việc hàng ngày\n\n' +
+                      '_Lưu ý: Hiện đang sử dụng chế độ offline._';
+        } else if (lowerMessage.includes('giúp') || lowerMessage.includes('help')) {
+          aiResponse = '🆘 **Hỗ trợ PingMe AI Assistant**\n\n' +
+                      '**Tôi có thể giúp bạn:**\n' +
+                      '• Trả lời câu hỏi tổng quan\n' +
+                      '• Phân tích và mô tả hình ảnh\n' +
+                      '• Đọc và tóm tắt tài liệu\n' +
+                      '• Review và giải thích code\n' +
+                      '• Hỗ trợ dịch thuật\n\n' +
+                      '**Upload file:** Tôi hỗ trợ nhiều định dạng file khác nhau\n' +
+                      '_Lưu ý: Đang hoạt động ở chế độ offline._';
         } else {
-          // Random response
-          aiResponse = MOCK_AI_RESPONSES[Math.floor(Math.random() * MOCK_AI_RESPONSES.length)];
-        }
-        
-        // Handle attachments for fallback
-        if (attachments.length > 0) {
-          const fileTypes = attachments.map(file => {
-            if (file.type.startsWith('image/')) return 'hình ảnh';
-            if (file.type.includes('pdf')) return 'PDF';
-            return 'file';
-          });
-          aiResponse += `\n\nTôi đã nhận được ${fileTypes.join(', ')} từ bạn. Tôi sẽ phân tích và phản hồi sớm nhất.`;
+          aiResponse = '🤖 **AI Assistant đang offline**\n\n' +
+                      `Tôi đã nhận được tin nhắn: "${message}"\n\n` +
+                      'Hiện tại webhook không khả dụng, nhưng tôi vẫn có thể:\n' +
+                      '• Nhận và lưu trữ tin nhắn của bạn\n' +
+                      '• Xử lý file upload cơ bản\n' +
+                      '• Cung cấp hỗ trợ offline\n\n' +
+                      '_Khi kết nối phục hồi, tôi sẽ có thể trả lời đầy đủ hơn._';
         }
       }
-      
-      const aiMessage = {
-        id: `msg-${Date.now()}`,
-        content: aiResponse,
-        timestamp: new Date().toISOString(),
-        sender: 'ai'
-      };
-      
+
+      // Return successful response
       return {
         success: true,
-        data: aiMessage
+        response: aiResponse,
+        source: 'webhook',
+        timestamp: new Date().toISOString()
       };
-      
+
     } catch (error) {
-      console.error('Error in sendMessage:', error);
-      
-      // Fallback error response
-      const errorMessage = {
-        id: `msg-${Date.now()}`,
-        content: 'Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại sau.',
-        timestamp: new Date().toISOString(),
-        sender: 'ai'
-      };
-      
+      console.error('💥 Error in sendMessage:', error);
       return {
         success: false,
-        data: errorMessage,
-        error: error.message
+        error: error.message,
+        response: '❌ **Lỗi hệ thống**\n\nĐã xảy ra lỗi khi xử lý tin nhắn của bạn. Vui lòng thử lại sau.'
       };
     }
   },

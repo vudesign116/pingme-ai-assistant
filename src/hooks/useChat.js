@@ -56,19 +56,50 @@ export const useChat = (user) => {
     
     setLoading(true);
 
+    // Add temporary loading message for progress tracking
+    const loadingMessageId = `loading-${Date.now()}`;
+    const loadingMessage = {
+      id: loadingMessageId,
+      content: '🔍 Đang xử lý yêu cầu của bạn...',
+      timestamp: new Date().toISOString(),
+      sender: 'ai',
+      isLoading: true
+    };
+    setMessages(prev => [...prev, loadingMessage]);
+
+    // Progress update callback
+    const onProgressUpdate = (progressText) => {
+      setMessages(prev => 
+        prev.map(msg => 
+          msg.id === loadingMessageId 
+            ? { ...msg, content: progressText }
+            : msg
+        )
+      );
+    };
+
     try {
-      // Send to AI service with userId
-      const result = await chatService.sendMessage(content, attachments, user.employeeId);
+      // Send to AI service with progress callback
+      const result = await chatService.sendMessage(content, attachments, user.employeeId, onProgressUpdate);
+      
+      // Remove loading message
+      setMessages(prev => prev.filter(msg => msg.id !== loadingMessageId));
       
       if (result.success) {
-        setMessages(prev => [...prev, result.data]);
+        const aiMessage = {
+          id: `ai-msg-${Date.now()}`,
+          content: result.response,
+          timestamp: new Date().toISOString(),
+          sender: 'ai'
+        };
+        setMessages(prev => [...prev, aiMessage]);
         // Lưu AI response vào localStorage
-        chatHistoryService.saveMessage(user.employeeId, result.data);
+        chatHistoryService.saveMessage(user.employeeId, aiMessage);
       } else {
         // Add error message
         const errorMessage = {
           id: `error-msg-${Date.now()}`,
-          content: 'Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.',
+          content: result.response || 'Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.',
           timestamp: new Date().toISOString(),
           sender: 'ai',
           isError: true

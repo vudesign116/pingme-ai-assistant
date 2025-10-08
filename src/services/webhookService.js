@@ -61,13 +61,15 @@ const getWebhookUrl = () => {
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   
   if (isLocalhost) {
-    console.log('🔧 Using proxy URL for localhost to avoid CORS');
+    console.log('🔧 Using proxy URL for localhost (PRODUCTION mode)');
     return PROXY_WEBHOOK_URL;
   } else {
-    console.log('🌐 Using direct webhook URL for production');
-    return WEBHOOK_URL;
+    console.log('🌐 Using direct webhook URL (PRODUCTION mode)');
+    return WEBHOOK_URL;  
   }
 };
+
+
 
 // Helper function to format and clean AI response text
 const formatAIResponse = (text) => {
