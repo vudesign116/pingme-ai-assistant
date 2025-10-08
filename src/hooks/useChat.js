@@ -40,13 +40,16 @@ export const useChat = (user) => {
   const sendMessage = async (content, attachments = []) => {
     if (!content.trim() && attachments.length === 0) return;
 
+    const queryStartTime = Date.now();
+
     // Add user message to chat immediately
     const userMessage = {
       id: `user-msg-${Date.now()}`,
       content: content.trim(),
       timestamp: new Date().toISOString(),
       sender: 'user',
-      attachments: attachments
+      attachments: attachments,
+      queryTime: queryStartTime
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -63,12 +66,16 @@ export const useChat = (user) => {
       // Send to AI service
       const result = await chatService.sendMessage(content, attachments, user.employeeId, onProgressUpdate);
       
+      const responseTime = Date.now() - queryStartTime;
+      
       if (result.success) {
         const aiMessage = {
           id: `ai-msg-${Date.now()}`,
           content: result.response,
           timestamp: new Date().toISOString(),
-          sender: 'ai'
+          sender: 'ai',
+          responseTime: responseTime,
+          queryTime: queryStartTime
         };
         setMessages(prev => [...prev, aiMessage]);
         // Lưu AI response vào localStorage
@@ -80,7 +87,9 @@ export const useChat = (user) => {
           content: result.response || 'Xin lỗi, có lỗi xảy ra. Vui lòng thử lại.',
           timestamp: new Date().toISOString(),
           sender: 'ai',
-          isError: true
+          isError: true,
+          responseTime: responseTime,
+          queryTime: queryStartTime
         };
         setMessages(prev => [...prev, errorMessage]);
         // Lưu error message vào localStorage
@@ -88,12 +97,15 @@ export const useChat = (user) => {
       }
     } catch (error) {
       console.error('Error sending message:', error);
+      const responseTime = Date.now() - queryStartTime;
       const errorMessage = {
         id: `error-msg-${Date.now()}`,
         content: 'Không thể kết nối đến AI. Vui lòng kiểm tra kết nối mạng.',
         timestamp: new Date().toISOString(),
         sender: 'ai',
-        isError: true
+        isError: true,
+        responseTime: responseTime,
+        queryTime: queryStartTime
       };
       setMessages(prev => [...prev, errorMessage]);
       // Lưu error message vào localStorage

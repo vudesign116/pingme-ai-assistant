@@ -124,6 +124,16 @@ const Chat = ({ user, onLogout }) => {
     });
   };
 
+  const formatResponseTime = (responseTime) => {
+    if (!responseTime) return '';
+    
+    if (responseTime < 1000) {
+      return `${responseTime}ms`;
+    } else {
+      return `${(responseTime / 1000).toFixed(1)}s`;
+    }
+  };
+
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -265,6 +275,11 @@ const Chat = ({ user, onLogout }) => {
                   
                   <div className="message-time">
                     {formatTime(message.timestamp)}
+                    {message.responseTime && (
+                      <span className="response-time">
+                        • {formatResponseTime(message.responseTime)}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
