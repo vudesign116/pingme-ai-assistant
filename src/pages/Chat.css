@@ -216,6 +216,12 @@
 .message-content {
   flex: 1;
   max-width: 70%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  white-space: normal;
+  writing-mode: horizontal-tb;
+  direction: ltr;
 }
 
 .user-message .message-content {
@@ -230,7 +236,13 @@
   border-radius: 18px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  white-space: pre-wrap;
+  writing-mode: horizontal-tb;
+  direction: ltr;
   position: relative;
+  min-width: 20px;
 }
 
 .user-message .message-bubble {
@@ -333,6 +345,25 @@
     width: 6px;
     height: 6px;
   }
+}
+
+/* Fix vertical text display bug */
+.message-bubble,
+.message-content,
+.message-bubble * {
+  writing-mode: horizontal-tb !important;
+  direction: ltr !important;
+  text-orientation: mixed !important;
+}
+
+/* Ensure proper text flow */
+.message-bubble p,
+.message-bubble div,
+.message-bubble span {
+  display: inline-block;
+  width: auto;
+  white-space: normal;
+  word-wrap: break-word;
 }
 
 .message-time {
