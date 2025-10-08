@@ -225,14 +225,61 @@
 .table-wrapper {
   margin: 1em 0;
   overflow-x: auto;
+  overflow-y: hidden;
   border-radius: 8px;
   border: 1px solid #e9ecef;
+  position: relative;
+  /* Smooth scrolling on mobile */
+  -webkit-overflow-scrolling: touch;
+  /* Better scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: #dee2e6 transparent;
+}
+
+/* Webkit scrollbar styling */
+.table-wrapper::-webkit-scrollbar {
+  height: 8px;
+}
+
+.table-wrapper::-webkit-scrollbar-track {
+  background: #f8f9fa;
+  border-radius: 0 0 8px 8px;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb {
+  background: #dee2e6;
+  border-radius: 4px;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #adb5bd;
+}
+
+/* Scroll indicator for mobile */
+.table-wrapper::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  background: linear-gradient(90deg, transparent, rgba(233, 236, 239, 0.8));
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.table-wrapper:hover::after,
+.table-wrapper:focus-within::after {
+  opacity: 1;
 }
 
 .markdown-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.85em;
+  min-width: 500px; /* Minimum width to ensure scrolling is needed */
+  margin: 0;
 }
 
 .markdown-table th,
@@ -240,20 +287,70 @@
   padding: 0.75em 1em;
   text-align: left;
   border-bottom: 1px solid #e9ecef;
+  white-space: nowrap;
+  min-width: 120px; /* Minimum width for each cell */
+  max-width: 250px; /* Maximum width to prevent extremely wide cells */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.2s ease;
 }
 
 .markdown-table th {
   background: #f8f9fa;
   font-weight: 600;
   color: #495057;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .markdown-table tr:last-child td {
   border-bottom: none;
 }
 
+/* Table scroll hint for mobile */
+.table-scroll-hint {
+  display: none; /* Hidden by default, shown on mobile */
+  text-align: center;
+  font-size: 0.7rem;
+  color: #6c757d;
+  padding: 0.25rem;
+  background: rgba(248, 249, 250, 0.9);
+  border-top: 1px solid #e9ecef;
+  transition: opacity 0.3s ease;
+  opacity: 1;
+}
+
+.markdown-content.user .table-scroll-hint {
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.1);
+  border-top-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Hover effects for better interaction */
+.markdown-table tr:hover {
+  background-color: rgba(0, 122, 255, 0.05);
+}
+
+.markdown-table th:hover,
+.markdown-table td:hover {
+  overflow: visible;
+  white-space: normal;
+  word-break: break-word;
+  z-index: 100;
+  position: relative;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+
+/* User message table styling */
 .markdown-content.user .table-wrapper {
   border-color: rgba(255, 255, 255, 0.2);
+}
+
+.markdown-content.user .table-wrapper::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2));
 }
 
 .markdown-content.user .markdown-table th {
@@ -264,6 +361,16 @@
 .markdown-content.user .markdown-table th,
 .markdown-content.user .markdown-table td {
   border-bottom-color: rgba(255, 255, 255, 0.2);
+}
+
+.markdown-content.user .markdown-table tr:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.markdown-content.user .markdown-table th:hover,
+.markdown-content.user .markdown-table td:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
 }
 
 /* Horizontal rules */
@@ -302,12 +409,161 @@
     padding-left: 1.2em;
   }
   
+  /* Mobile table optimizations */
+  .table-wrapper {
+    margin: 0.75em -1rem; /* Extend to edges on mobile */
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  
+  /* Show scroll hint on mobile */
+  .table-scroll-hint {
+    display: block !important;
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 4px 8px;
+    font-size: 11px;
+    border-radius: 12px;
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    z-index: 10;
+    opacity: 0.9;
+  }
+  
+  .table-wrapper::after {
+    width: 40px; /* Larger scroll indicator on mobile */
+    background: linear-gradient(90deg, transparent, rgba(233, 236, 239, 0.9));
+  }
+  
   .markdown-table {
-    font-size: 0.8em;
+    font-size: 12px; /* Smaller font for mobile */
+    min-width: 600px; /* Force horizontal scroll */
   }
   
   .markdown-table th,
   .markdown-table td {
-    padding: 0.5em 0.75em;
+    padding: 8px 12px; /* More compact padding */
+    max-width: 150px; /* Reasonable max width on mobile */
+    min-width: 100px; /* Ensure minimum readability */
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  /* First column should be sticky for reference */
+  .markdown-table th:first-child,
+  .markdown-table td:first-child {
+    position: sticky;
+    left: 0;
+    background: #f8f9fa;
+    z-index: 5;
+    font-weight: 600;
+    min-width: 80px;
+    max-width: 120px;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.1);
+  }
+  
+  /* For user messages (blue background) */
+  .markdown-content.user .markdown-table th:first-child,
+  .markdown-content.user .markdown-table td:first-child {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+  }
+}
+
+/* Extra small mobile devices */
+@media (max-width: 480px) {
+  .table-wrapper {
+    margin: 0.5em -1.5rem; /* Extend even more on small phones */
+  }
+  
+  .markdown-table {
+    font-size: 11px; /* Even smaller font for tiny screens */
+    min-width: 500px; /* Still force scroll but not too wide */
+  }
+  
+  .markdown-table th,
+  .markdown-table td {
+    padding: 6px 8px; /* Very compact padding */
+    font-size: 11px;
+    min-width: 80px;
+    max-width: 120px;
+  }
+  
+  .markdown-table th:first-child,
+  .markdown-table td:first-child {
+    min-width: 60px;
+    max-width: 100px;
+    font-size: 10px;
+  }
+  
+  .table-scroll-hint {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+}
+  
+  .markdown-table th:first-child {
+    z-index: 15; /* Higher than regular headers */
+  }
+  
+  /* Show ellipsis for long content on mobile */
+  .markdown-table td {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+  }
+  
+  /* Touch-friendly hover alternatives */
+  .markdown-table td:active {
+    background-color: rgba(0, 122, 255, 0.1);
+    white-space: normal;
+    word-break: break-word;
+    min-height: 2em;
+  }
+  
+  .markdown-content.user .markdown-table th:first-child,
+  .markdown-content.user .markdown-table td:first-child {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  .markdown-content.user .markdown-table td:active {
+    background-color: rgba(255, 255, 255, 0.2);
+  }
+}
+
+/* Extra small mobile devices */
+@media (max-width: 480px) {
+  .table-wrapper {
+    margin: 0.5em -1.5rem; /* Extend even more on small phones */
+  }
+  
+  .markdown-table {
+    font-size: 11px; /* Even smaller font for tiny screens */
+    min-width: 500px; /* Still force scroll but not too wide */
+  }
+  
+  .markdown-table th,
+  .markdown-table td {
+    padding: 6px 8px; /* Very compact padding */
+    font-size: 11px;
+    min-width: 80px;
+    max-width: 120px;
+  }
+  
+  .markdown-table th:first-child,
+  .markdown-table td:first-child {
+    min-width: 60px;
+    max-width: 100px;
+    font-size: 10px;
+  }
+  
+  .table-scroll-hint {
+    font-size: 10px;
+    padding: 2px 6px;
   }
 }

@@ -1,6 +1,30 @@
 /**
  * File Upload Service
- * Handles uploading files to get public URLs while maintaining binary data
+ *      // Simple file hosting - working alternative
+      fileio: {
+        endpoint: 'https://file.io/',
+        supports: ['*'],
+        maxSize: 100 * 1024 * 1024, // 100MB
+        method: 'POST'
+      },
+      
+      // 0x0.st - Simple file hosting
+      zerobin: {
+        endpoint: 'https://0x0.st',
+        supports: ['*'],
+        maxSize: 512 * 1024 * 1024, // 512MB
+        method: 'POST'
+      },
+      
+      // Imgur (disabled - needs client ID)
+      imgur: {
+        endpoint: 'https://api.imgur.com/3/image',
+        clientId: 'your-imgur-client-id', // Need to set real client ID
+        supports: ['image/*'],
+        maxSize: 10 * 1024 * 1024, // 10MB
+        method: 'POST',
+        disabled: true
+      },g files to get public URLs while maintaining binary data
  * Supports multiple upload services: GitHub, Cloudinary, ImgBB, etc.
  */
 
@@ -8,21 +32,23 @@ class FileUploadService {
   constructor() {
     // Configuration for different upload services
     this.uploadServices = {
-      // Free image hosting services - BEST for direct access
+      // Free image hosting services - DISABLED due to API issues
       imgbb: {
         endpoint: 'https://api.imgbb.com/1/upload',
-        key: '7dca36c81c1eb5b5e4419b7e8f5f6e8e', // Free ImgBB API key (real but demo)
+        key: 'disabled', // API key issues - disable for now
         supports: ['image/*'],
         maxSize: 32 * 1024 * 1024, // 32MB
-        method: 'POST'
+        method: 'POST',
+        disabled: true
       },
       
-      // PostImages - Free image hosting with direct URLs
+      // PostImages - DISABLED due to endpoint issues
       postimages: {
         endpoint: 'https://postimages.org/json/rr',
         supports: ['image/*'],
         maxSize: 24 * 1024 * 1024, // 24MB
-        method: 'POST'
+        method: 'POST',
+        disabled: true
       },
       
       // ImageBB alternative with different endpoint
@@ -61,8 +87,8 @@ class FileUploadService {
       }
     };
     
-    // Priority: Reliable services first, problematic ones last
-    this.servicePriority = ['imgbb', 'postimages', 'github', 'imgur', 'tmpfiles'];
+    // Priority: Use data URL as primary (most reliable for n8n)
+    this.servicePriority = ['tmpfiles'];
   }
 
   /**
@@ -79,36 +105,14 @@ class FileUploadService {
       const binaryData = await this.fileToBinary(file);
       const base64Data = await this.fileToBase64(file);
       
-      // Try to get public URL
-      let publicUrl = null;
-      let uploadResult = null;
-      
-      // Try different upload services in priority order
-      for (const serviceName of this.servicePriority) {
-        try {
-          console.log(`🔄 Trying upload service: ${serviceName}`);
-          uploadResult = await this.uploadToService(file, serviceName, base64Data);
-          if (uploadResult && uploadResult.url) {
-            publicUrl = uploadResult.url;
-            console.log(`✅ Successfully uploaded to ${serviceName}: ${publicUrl}`);
-            break;
-          }
-        } catch (error) {
-          console.warn(`❌ Failed to upload to ${serviceName}:`, error.message);
-          continue;
-        }
-      }
-      
-      // If no public URL available, create fallback
-      if (!publicUrl) {
-        console.warn('⚠️ Could not upload to any service, using fallback');
-        const fallbackResult = await this.createFallbackUrl(file, base64Data);
-        publicUrl = fallbackResult.url;
-        uploadResult = {
-          service: fallbackResult.service,
-          warning: fallbackResult.warning
-        };
-      }
+      // Use data URL as primary method (most reliable for n8n)
+      console.log('� Using data URL for n8n compatibility - most reliable method');
+      const fallbackResult = await this.createFallbackUrl(file, base64Data);
+      const publicUrl = fallbackResult.url;
+      const uploadResult = {
+        service: 'data-url',
+        warning: 'Data URL used for maximum compatibility'
+      };
       
       return {
         success: true,
@@ -158,11 +162,21 @@ class FileUploadService {
       throw new Error(`File type ${file.type} not supported by ${serviceName}`);
     }
     
+    // Skip disabled services
+    const serviceConfig = this.uploadServices[serviceName];
+    if (serviceConfig.disabled) {
+      throw new Error(`Service ${serviceName} is disabled`);
+    }
+
     switch (serviceName) {
       case 'imgbb':
         return await this.uploadToImgBB(file, base64Data);
       case 'postimages':
         return await this.uploadToPostImages(file, base64Data);
+      case 'fileio':
+        return await this.uploadToFileIO(file);
+      case 'zerobin':
+        return await this.uploadToZeroBin(file);
       case 'imgur':
         return await this.uploadToImgur(file, base64Data);
       case 'tmpfiles':
@@ -275,6 +289,61 @@ class FileUploadService {
   }
 
   /**
+   * Upload to File.io (simple file hosting)
+   */
+  async uploadToFileIO(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await fetch('https://file.io/', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!response.ok) {
+      throw new Error(`File.io upload failed: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    if (!result.success || !result.link) {
+      throw new Error('File.io did not return valid URL');
+    }
+    
+    return {
+      url: result.link,
+      service: 'fileio',
+      expires: result.expiry || 'unknown'
+    };
+  }
+
+  /**
+   * Upload to 0x0.st (simple anonymous file hosting)
+   */
+  async uploadToZeroBin(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await fetch('https://0x0.st', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!response.ok) {
+      throw new Error(`0x0.st upload failed: ${response.status}`);
+    }
+    
+    const result = await response.text();
+    if (!result || !result.startsWith('http')) {
+      throw new Error('0x0.st did not return valid URL');
+    }
+    
+    return {
+      url: result.trim(),
+      service: '0x0.st'
+    };
+  }
+
+  /**
    * Upload to TmpFiles (temporary file sharing) - URLs may be problematic
    */
   async uploadToTmpFiles(file) {
@@ -354,27 +423,17 @@ class FileUploadService {
   }
 
   /**
-   * Create fallback URL (data URL for external access)
+   * Create data URL (primary method for n8n compatibility)
    */
   async createFallbackUrl(file, base64Data) {
-    console.warn('⚠️ All upload services failed, using fallback strategy');
+    // Data URLs are the most compatible with n8n workflows
+    // They can be processed directly without external HTTP requests
+    console.log(`📄 Creating data URL: ${file.name} (${file.size} bytes)`);
     
-    // For images under 1MB, use data URL (externally accessible)
-    if (file.type.startsWith('image/') && file.size < 1024 * 1024) {
-      console.log(`📄 Using data URL for small image: ${file.name} (${file.size} bytes)`);
-      return {
-        url: base64Data,
-        service: 'data-url',
-        warning: 'Using data URL - may have size limitations in some contexts'
-      };
-    }
-    
-    // For larger files or non-images, still provide data URL but with warning
-    console.warn(`📄 Using data URL for large file: ${file.name} (${file.size} bytes) - may cause issues`);
     return {
       url: base64Data,
       service: 'data-url',
-      warning: 'Large data URL - may cause performance issues or size limitations'
+      warning: file.size > 2 * 1024 * 1024 ? 'Large file - may have size limitations in some contexts' : 'Data URL ready for processing'
     };
   }
 

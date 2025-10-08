@@ -1,5 +1,6 @@
 import { webhookService } from './webhookService';
-import fileUploadService from './fileUploadService.js';
+import simpleFileUpload from './simpleFileUpload.js';
+import { excelConverter } from '../utils/excelConverter.js';
 
 // Mock AI responses - replace with real AI API later
 const MOCK_AI_RESPONSES = [
@@ -83,6 +84,20 @@ export const chatService = {
   getFileProcessingStrategy(file, useUrl = true) {
     const fileType = file.type.toLowerCase();
     const fileName = file.name.toLowerCase();
+    
+    // Excel files - convert to JSON for AI analysis
+    if (fileType.includes('sheet') || 
+        fileType.includes('excel') ||
+        fileName.endsWith('.xlsx') || 
+        fileName.endsWith('.xls') ||
+        fileName.endsWith('.xlsm')) {
+      return {
+        strategy: 'excel',
+        supportedByAI: true,
+        processing: 'json_conversion',
+        description: 'Excel file converted to JSON for AI analysis'
+      };
+    }
     
     // Images - use URL link instead of base64 for better performance
     if (fileType.startsWith('image/')) {
@@ -322,8 +337,8 @@ export const chatService = {
     console.log(`📤 Processing file for AI: ${file.name} (${file.size} bytes)`);
 
     try {
-      // Step 1: Upload file to get public URL and binary data
-      const uploadResult = await fileUploadService.uploadFile(file);
+      // Step 1: Upload file to get public HTTP/HTTPS URL
+      const uploadResult = await simpleFileUpload.uploadFile(file);
       
       if (!uploadResult.success) {
         console.error('❌ File upload failed:', uploadResult.error);
@@ -339,49 +354,40 @@ export const chatService = {
         size: uploadResult.fileSize
       });
 
-      // Step 2: Determine processing strategy  
-      const processingStrategy = this.getFileProcessingStrategy(file);
-      console.log(`📁 Processing file: ${file.name}`, processingStrategy);
-      
+      // Step 2: Process Excel files to JSON
       let processedData = null;
-      let processingError = null;
-      
-      try {
-        switch (processingStrategy.processing) {
-          case 'url':
-          case 'base64':
-            // For images and binary files - use base64 from upload service
-            processedData = uploadResult.base64;
-            console.log(`🖼️ ${processingStrategy.description} - using uploaded base64 (${processedData?.length || 0} chars)`);
-            break;
-            
-          case 'text_content':
-            // For text files and code files
-            processedData = await this.convertFileToText(file);
-            console.log(`📝 ${processingStrategy.description} - extracted text (${processedData.length} chars)`);
-            break;
-            
-          case 'metadata':
-          default:
-            // For unsupported files
-            processedData = null;
-            console.log(`📋 ${processingStrategy.description} - metadata only`);
-            break;
+      if (excelConverter.isExcelFile(file)) {
+        console.log(`📊 Converting Excel file to JSON: ${file.name}`);
+        try {
+          const excelJSON = await excelConverter.convertExcelToJSON(file);
+          const aiSummary = excelConverter.createAISummary(excelJSON);
+          
+          processedData = {
+            type: 'excel_json',
+            originalFile: file.name,
+            summary: aiSummary,
+            fullData: excelJSON
+          };
+          
+          console.log(`✅ Excel converted to JSON:`, {
+            sheets: excelJSON.summary.totalSheets,
+            rows: excelJSON.summary.totalRows,
+            size: JSON.stringify(processedData).length
+          });
+        } catch (error) {
+          console.warn(`⚠️ Excel conversion failed for ${file.name}:`, error);
+          processedData = null;
         }
-      } catch (error) {
-        console.error(`❌ Failed to process file ${file.name}:`, error);
-        processingError = error.message;
       }
-      
-      // Create blob URL for preview with proper error handling
+
+      // Create blob URL for UI preview only
       let previewUrl = null;
       try {
-        // Only create blob URL for images and if file is valid
         if (file.type.startsWith('image/') && file.size > 0) {
           previewUrl = URL.createObjectURL(file);
-          console.log(`🔗 Created blob URL for preview: ${file.name} -> ${previewUrl}`);
+          console.log(`🔗 Created blob URL for preview: ${file.name}`);
           
-          // Set timeout to revoke URL after 5 minutes to prevent memory leaks
+          // Auto cleanup after 5 minutes
           setTimeout(() => {
             if (previewUrl) {
               try {
@@ -391,46 +397,37 @@ export const chatService = {
                 console.warn(`Failed to auto-revoke blob URL:`, e);
               }
             }
-          }, 5 * 60 * 1000); // 5 minutes
+          }, 5 * 60 * 1000);
         }
       } catch (error) {
         console.warn(`⚠️ Could not create blob URL for ${file.name}:`, error);
       }
       
+      // Enhanced file data structure
       const fileData = {
         id: `file-${Date.now()}`,
         name: file.name,
         size: file.size,
         type: file.type,
-        url: previewUrl, // For UI preview (local blob URL)
-        originalFile: file, // Keep reference to original file
+        url: previewUrl, // For UI preview only
+        originalFile: file,
         
-        // AI processing data
-        processedData: processedData,
-        processingStrategy: processingStrategy,
-        processingError: processingError,
-        
-        // Data for webhook - BOTH binary and public URL
-        base64: processedData, // Binary data for AI processing
-        content: processingStrategy.processing === 'text_content' ? processedData : null,
-        publicUrl: uploadResult.url, // Public URL (http/https) for n8n
-        binaryData: uploadResult.binaryData, // Raw binary for advanced processing
-        
-        // Upload service info
+        // Public URL for webhook (HTTP/HTTPS)
+        publicUrl: uploadResult.url,
         uploadService: uploadResult.uploadService,
-        uploadUrl: uploadResult.url,
+        
+        // Processed data for AI (Excel -> JSON)
+        processedData: processedData,
+        hasProcessedData: !!processedData,
         
         mimeType: file.type,
         isImage: file.type.startsWith('image/'),
-        isText: processingStrategy.strategy === 'text' || processingStrategy.strategy === 'code',
-        isSupported: processingStrategy.supportedByAI
+        isExcel: excelConverter.isExcelFile(file),
+        isSupported: true // All files are supported with public URLs
       };
       
-      // Note: File data will be sent to webhook when user sends a message with attachments
-      // No need to trigger webhook just for file upload/attachment
-      console.log(`📎 File processed and ready: ${file.name} (${processingStrategy.description})`);
+      console.log(`📎 File ready: ${file.name}`);
       console.log(`🌐 Public URL: ${uploadResult.url}`);
-      console.log(`📊 Binary data: ${uploadResult.binaryData?.byteLength || 0} bytes`);
       
       return {
         success: true,

@@ -200,47 +200,40 @@ export const webhookService = {
             hasContent: !!(messageData.message || messageData.userMessage)
           },
           
-          // Hình ảnh (tách riêng) - Cung cấp CẢNG binary và public URL
+          // Hình ảnh (tách riêng) - Chỉ gửi public URL
           images: {
             count: imageAttachments.length,
             items: imageAttachments.map(img => ({
               name: img.name,
               type: img.type,
               size: img.size,
-              // Binary data cho AI processing
-              base64: img.base64, 
-              binaryData: img.binaryData,
-              // Public URL cho n8n truy cập external
-              url: img.publicUrl || img.uploadUrl,
-              // Service info
+              // Public HTTP/HTTPS URL cho n8n
+              url: img.publicUrl,
               uploadService: img.uploadService,
               metadata: {
-                width: img.width,
-                height: img.height,
-                lastModified: img.lastModified,
-                isPublicUrl: !!(img.publicUrl || img.uploadUrl)
+                lastModified: img.lastModified || Date.now(),
+                isImage: true
               }
             }))
           },
           
-          // Files đính kèm (tách riêng) - Cung cấp CẢNG binary và public URL  
+          // Files đính kèm (tách riêng) - URL + JSON data cho Excel
           files: {
             count: fileAttachments.length,
             items: fileAttachments.map(file => ({
               name: file.name,
               type: file.type,
               size: file.size,
-              // Content data
-              content: file.content || file.text, // Text content nếu có
-              base64: file.base64, // Base64 data cho binary files
-              binaryData: file.binaryData,
-              // Public URL cho n8n truy cập external
-              url: file.publicUrl || file.uploadUrl,
-              // Service info
+              // Public HTTP/HTTPS URL cho n8n
+              url: file.publicUrl,
               uploadService: file.uploadService,
+              // Excel JSON data cho AI
+              isExcel: file.isExcel || false,
+              jsonData: file.hasProcessedData ? file.processedData : null,
               metadata: {
                 lastModified: file.lastModified,
-                processingStrategy: file.processingStrategy
+                processingStrategy: file.processingStrategy,
+                hasJsonConversion: file.hasProcessedData || false
               }
             }))
           },
