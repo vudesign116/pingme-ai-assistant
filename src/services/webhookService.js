@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Webhook URL - Production version
-const WEBHOOK_URL = 'https://kpspa.app.n8n.cloud/webhook/e9bbd901-ec61-424a-963f-8b63a7f9b17d';
+// Webhook URL - Test version for debugging
+const WEBHOOK_URL = 'https://kpspa.app.n8n.cloud/webhook-test/e9bbd901-ec61-424a-963f-8b63a7f9b17d';
 const PROXY_WEBHOOK_URL = '/api/webhook'; // Use proxy to avoid CORS in development
 
 // Create axios instance with default config
@@ -165,27 +165,108 @@ export const webhookService = {
   async sendChatMessage(messageData) {
     try {
       const user = JSON.parse(localStorage.getItem('userInfo') || '{}');
+      const attachments = messageData.files || messageData.attachments || [];
+      
+      // Tách riêng các loại message type để dễ xử lý trên n8n
+      const imageAttachments = attachments.filter(att => att.isImage);
+      const fileAttachments = attachments.filter(att => !att.isImage);
+      const hasText = messageData.message || messageData.userMessage;
+      
+      // Xác định message type chính
+      let messageType = 'text';
+      if (imageAttachments.length > 0 && fileAttachments.length > 0) {
+        messageType = 'mixed_attachments'; // Cả hình ảnh và file
+      } else if (imageAttachments.length > 0) {
+        messageType = hasText ? 'text_with_images' : 'images_only';
+      } else if (fileAttachments.length > 0) {
+        messageType = hasText ? 'text_with_files' : 'files_only';
+      }
       
       const payload = {
         action: 'chat_message',
+        messageType: messageType, // Loại tin nhắn để n8n dễ phân biệt
         timestamp: new Date().toISOString(),
         data: {
+          // Thông tin cơ bản
           messageId: messageData.id,
           userId: user.employeeId,
           userName: user.name,
-          userMessage: messageData.message || messageData.userMessage,
-          attachments: messageData.files || messageData.attachments || [],
           sessionId: messageData.sessionId || `session-${Date.now()}`,
-          conversationContext: messageData.context || {}
+          conversationContext: messageData.context || {},
+          
+          // Nội dung text
+          text: {
+            content: messageData.message || messageData.userMessage || '',
+            hasContent: !!(messageData.message || messageData.userMessage)
+          },
+          
+          // Hình ảnh (tách riêng) - Cung cấp CẢNG binary và public URL
+          images: {
+            count: imageAttachments.length,
+            items: imageAttachments.map(img => ({
+              name: img.name,
+              type: img.type,
+              size: img.size,
+              // Binary data cho AI processing
+              base64: img.base64, 
+              binaryData: img.binaryData,
+              // Public URL cho n8n truy cập external
+              url: img.publicUrl || img.uploadUrl,
+              // Service info
+              uploadService: img.uploadService,
+              metadata: {
+                width: img.width,
+                height: img.height,
+                lastModified: img.lastModified,
+                isPublicUrl: !!(img.publicUrl || img.uploadUrl)
+              }
+            }))
+          },
+          
+          // Files đính kèm (tách riêng) - Cung cấp CẢNG binary và public URL  
+          files: {
+            count: fileAttachments.length,
+            items: fileAttachments.map(file => ({
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              // Content data
+              content: file.content || file.text, // Text content nếu có
+              base64: file.base64, // Base64 data cho binary files
+              binaryData: file.binaryData,
+              // Public URL cho n8n truy cập external
+              url: file.publicUrl || file.uploadUrl,
+              // Service info
+              uploadService: file.uploadService,
+              metadata: {
+                lastModified: file.lastModified,
+                processingStrategy: file.processingStrategy
+              }
+            }))
+          },
+          
+          // Summary cho n8n dễ xử lý
+          summary: {
+            hasText: !!(messageData.message || messageData.userMessage),
+            hasImages: imageAttachments.length > 0,
+            hasFiles: fileAttachments.length > 0,
+            totalAttachments: attachments.length,
+            imageCount: imageAttachments.length,
+            fileCount: fileAttachments.length
+          }
         }
       };
 
       const webhookUrl = getWebhookUrl();
       
-      // Log image attachments for debugging
-      const imageAttachments = payload.data.attachments.filter(att => att.isImage);
-      if (imageAttachments.length > 0) {
-        console.log('�️ Sending images to webhook:', imageAttachments.map(img => ({
+      // Log structured data for debugging
+      console.log(`📨 Message Type: ${messageType}`);
+      console.log(`📝 Has Text: ${payload.data.text.hasContent}`);
+      console.log(`🖼️ Images: ${payload.data.images.count}`);
+      console.log(`📎 Files: ${payload.data.files.count}`);
+      
+      if (payload.data.images.count > 0) {
+        console.log('🖼️ Sending images to webhook:', payload.data.images.items.map(img => ({
           name: img.name,
           type: img.type,
           size: img.size,
@@ -194,13 +275,28 @@ export const webhookService = {
         })));
       }
       
-      console.log('�🚀 Sending to webhook:', webhookUrl, {
-        ...payload,
+      console.log('🚀 Sending to webhook:', webhookUrl, {
+        action: payload.action,
+        messageType: payload.messageType,
+        timestamp: payload.timestamp,
         data: {
           ...payload.data,
-          attachments: payload.data.attachments.map(att => att.isImage ? 
-            { ...att, base64: `[BASE64_DATA_${att.base64?.length || 0}_CHARS]` } : att
-          )
+          // Ẩn base64 data trong log để tránh spam console
+          images: {
+            ...payload.data.images,
+            items: payload.data.images.items.map(img => ({
+              ...img,
+              base64: img.base64 ? `[BASE64_DATA_${img.base64.length}_CHARS]` : null
+            }))
+          },
+          files: {
+            ...payload.data.files,
+            items: payload.data.files.items.map(file => ({
+              ...file,
+              base64: file.base64 ? `[BASE64_DATA_${file.base64.length}_CHARS]` : null,
+              content: file.content ? `[TEXT_CONTENT_${file.content.length}_CHARS]` : null
+            }))
+          }
         }
       });
       
@@ -270,12 +366,16 @@ export const webhookService = {
           console.log('✅ Found response.messages array');
           // Handle messages array format (common in n8n)
           const firstMessage = response.data.messages[0];
+          console.log('📝 First message object:', firstMessage);
           if (firstMessage.text) {
             aiResponse = firstMessage.text;
+            console.log('✅ Using firstMessage.text:', aiResponse);
           } else if (firstMessage.content) {
             aiResponse = firstMessage.content;
+            console.log('✅ Using firstMessage.content:', aiResponse);
           } else if (typeof firstMessage === 'string') {
             aiResponse = firstMessage;
+            console.log('✅ Using firstMessage as string:', aiResponse);
           }
         } else if (Array.isArray(response.data) && response.data.length > 0) {
           console.log('✅ Found array response, using first item');
@@ -332,13 +432,19 @@ export const webhookService = {
         }
       }
       
-      return {
+      const finalResult = {
         success: true,
+        response: aiResponse,
         data: {
           ...response.data,
           response: aiResponse
         }
       };
+      
+      console.log('🎉 Final result being returned:', finalResult);
+      console.log('🎯 Final aiResponse:', aiResponse);
+      
+      return finalResult;
     } catch (error) {
       console.error('❌ Failed to send chat message to webhook:', error);
       

@@ -1,4 +1,5 @@
 import { webhookService } from './webhookService';
+import fileUploadService from './fileUploadService.js';
 
 // Mock AI responses - replace with real AI API later
 const MOCK_AI_RESPONSES = [
@@ -79,17 +80,17 @@ export const chatService = {
   },
 
   // Get file processing strategy for AI
-  getFileProcessingStrategy(file) {
+  getFileProcessingStrategy(file, useUrl = true) {
     const fileType = file.type.toLowerCase();
     const fileName = file.name.toLowerCase();
     
-    // Images - convert to base64 for vision processing
+    // Images - use URL link instead of base64 for better performance
     if (fileType.startsWith('image/')) {
       return {
         strategy: 'vision',
         supportedByAI: true,
-        processing: 'base64',
-        description: 'Image for AI vision analysis'
+        processing: useUrl ? 'url' : 'base64',
+        description: useUrl ? 'Image URL for AI vision analysis' : 'Image for AI vision analysis'
       };
     }
     
@@ -317,93 +318,132 @@ export const chatService = {
         message: 'File quá lớn. Vui lòng chọn file nhỏ hơn 10MB.'
       };
     }
-    
-    // Determine processing strategy
-    const processingStrategy = this.getFileProcessingStrategy(file);
-    console.log(`📁 Processing file: ${file.name}`, processingStrategy);
-    
-    let processedData = null;
-    let processingError = null;
-    
+
+    console.log(`📤 Processing file for AI: ${file.name} (${file.size} bytes)`);
+
     try {
-      switch (processingStrategy.processing) {
-        case 'base64':
-          // For images and binary files
-          processedData = await this.convertFileToBase64(file);
-          console.log(`🖼️ ${processingStrategy.description} - converted to base64 (${processedData.length} chars)`);
-          break;
-          
-        case 'text_content':
-          // For text files and code files
-          processedData = await this.convertFileToText(file);
-          console.log(`� ${processingStrategy.description} - extracted text (${processedData.length} chars)`);
-          break;
-          
-        case 'metadata':
-        default:
-          // For unsupported files
-          processedData = null;
-          console.log(`📋 ${processingStrategy.description} - metadata only`);
-          break;
+      // Step 1: Upload file to get public URL and binary data
+      const uploadResult = await fileUploadService.uploadFile(file);
+      
+      if (!uploadResult.success) {
+        console.error('❌ File upload failed:', uploadResult.error);
+        return {
+          success: false,
+          message: `Không thể upload file: ${uploadResult.error}`
+        };
       }
-    } catch (error) {
-      console.error(`❌ Failed to process file ${file.name}:`, error);
-      processingError = error.message;
-    }
-    
-    // Create blob URL for preview with proper error handling
-    let previewUrl = null;
-    try {
-      // Only create blob URL for images and if file is valid
-      if (file.type.startsWith('image/') && file.size > 0) {
-        previewUrl = URL.createObjectURL(file);
-        console.log(`🔗 Created blob URL for preview: ${file.name} -> ${previewUrl}`);
-        
-        // Set timeout to revoke URL after 5 minutes to prevent memory leaks
-        setTimeout(() => {
-          if (previewUrl) {
-            try {
-              URL.revokeObjectURL(previewUrl);
-              console.log(`⏰ Auto-revoked blob URL for: ${file.name}`);
-            } catch (e) {
-              console.warn(`Failed to auto-revoke blob URL:`, e);
+
+      console.log(`✅ File uploaded successfully:`, {
+        url: uploadResult.url,
+        service: uploadResult.uploadService,
+        size: uploadResult.fileSize
+      });
+
+      // Step 2: Determine processing strategy  
+      const processingStrategy = this.getFileProcessingStrategy(file);
+      console.log(`📁 Processing file: ${file.name}`, processingStrategy);
+      
+      let processedData = null;
+      let processingError = null;
+      
+      try {
+        switch (processingStrategy.processing) {
+          case 'url':
+          case 'base64':
+            // For images and binary files - use base64 from upload service
+            processedData = uploadResult.base64;
+            console.log(`🖼️ ${processingStrategy.description} - using uploaded base64 (${processedData?.length || 0} chars)`);
+            break;
+            
+          case 'text_content':
+            // For text files and code files
+            processedData = await this.convertFileToText(file);
+            console.log(`📝 ${processingStrategy.description} - extracted text (${processedData.length} chars)`);
+            break;
+            
+          case 'metadata':
+          default:
+            // For unsupported files
+            processedData = null;
+            console.log(`📋 ${processingStrategy.description} - metadata only`);
+            break;
+        }
+      } catch (error) {
+        console.error(`❌ Failed to process file ${file.name}:`, error);
+        processingError = error.message;
+      }
+      
+      // Create blob URL for preview with proper error handling
+      let previewUrl = null;
+      try {
+        // Only create blob URL for images and if file is valid
+        if (file.type.startsWith('image/') && file.size > 0) {
+          previewUrl = URL.createObjectURL(file);
+          console.log(`🔗 Created blob URL for preview: ${file.name} -> ${previewUrl}`);
+          
+          // Set timeout to revoke URL after 5 minutes to prevent memory leaks
+          setTimeout(() => {
+            if (previewUrl) {
+              try {
+                URL.revokeObjectURL(previewUrl);
+                console.log(`⏰ Auto-revoked blob URL for: ${file.name}`);
+              } catch (e) {
+                console.warn(`Failed to auto-revoke blob URL:`, e);
+              }
             }
-          }
-        }, 5 * 60 * 1000); // 5 minutes
+          }, 5 * 60 * 1000); // 5 minutes
+        }
+      } catch (error) {
+        console.warn(`⚠️ Could not create blob URL for ${file.name}:`, error);
       }
+      
+      const fileData = {
+        id: `file-${Date.now()}`,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        url: previewUrl, // For UI preview (local blob URL)
+        originalFile: file, // Keep reference to original file
+        
+        // AI processing data
+        processedData: processedData,
+        processingStrategy: processingStrategy,
+        processingError: processingError,
+        
+        // Data for webhook - BOTH binary and public URL
+        base64: processedData, // Binary data for AI processing
+        content: processingStrategy.processing === 'text_content' ? processedData : null,
+        publicUrl: uploadResult.url, // Public URL (http/https) for n8n
+        binaryData: uploadResult.binaryData, // Raw binary for advanced processing
+        
+        // Upload service info
+        uploadService: uploadResult.uploadService,
+        uploadUrl: uploadResult.url,
+        
+        mimeType: file.type,
+        isImage: file.type.startsWith('image/'),
+        isText: processingStrategy.strategy === 'text' || processingStrategy.strategy === 'code',
+        isSupported: processingStrategy.supportedByAI
+      };
+      
+      // Note: File data will be sent to webhook when user sends a message with attachments
+      // No need to trigger webhook just for file upload/attachment
+      console.log(`📎 File processed and ready: ${file.name} (${processingStrategy.description})`);
+      console.log(`🌐 Public URL: ${uploadResult.url}`);
+      console.log(`📊 Binary data: ${uploadResult.binaryData?.byteLength || 0} bytes`);
+      
+      return {
+        success: true,
+        data: fileData
+      };
+      
     } catch (error) {
-      console.warn(`⚠️ Could not create blob URL for ${file.name}:`, error);
+      console.error(`💥 Failed to process file ${file.name}:`, error);
+      return {
+        success: false,
+        message: `Không thể xử lý file: ${error.message}`
+      };
     }
-    
-    const fileData = {
-      id: `file-${Date.now()}`,
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      url: previewUrl, // For preview (can be null if failed)
-      originalFile: file, // Keep reference to original file
-      
-      // AI processing data
-      processedData: processedData,
-      processingStrategy: processingStrategy,
-      processingError: processingError,
-      
-      // Legacy support
-      base64: processingStrategy.processing === 'base64' ? processedData : null,
-      mimeType: file.type,
-      isImage: file.type.startsWith('image/'),
-      isText: processingStrategy.strategy === 'text' || processingStrategy.strategy === 'code',
-      isSupported: processingStrategy.supportedByAI
-    };
-    
-    // Note: File data will be sent to webhook when user sends a message with attachments
-    // No need to trigger webhook just for file upload/attachment
-    console.log(`📎 File processed and ready: ${file.name} (${processingStrategy.description})`);
-    
-    return {
-      success: true,
-      data: fileData
-    };
   },
 
   // Get chat history from webhook or fallback to mock

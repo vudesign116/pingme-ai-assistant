@@ -27,10 +27,12 @@ const Chat = ({ user, onLogout }) => {
   const [showWebhookDebugger, setShowWebhookDebugger] = useState(false);
   const [showHistoryManager, setShowHistoryManager] = useState(false);
   const [toast, setToast] = useState(null);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const fileInputRef = useRef(null);
   const imageInputRef = useRef(null);
   const attachMenuRef = useRef(null);
   const userMenuRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   
   const { 
     messages, 
@@ -67,6 +69,28 @@ const Chat = ({ user, onLogout }) => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  // Handle scroll to show/hide scroll-to-bottom button
+  useEffect(() => {
+    const handleScroll = () => {
+      if (messagesContainerRef.current) {
+        const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+        const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+        setShowScrollToBottom(!isNearBottom && messages.length > 0);
+      }
+    };
+
+    const container = messagesContainerRef.current;
+    if (container) {
+      container.addEventListener('scroll', handleScroll);
+      return () => container.removeEventListener('scroll', handleScroll);
+    }
+  }, [messages.length]);
+
+  // Scroll to bottom function
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   const handleSendMessage = async () => {
     // Don't send empty messages
@@ -210,7 +234,7 @@ const Chat = ({ user, onLogout }) => {
 
 
       {/* Messages */}
-      <div className="messages-container">
+      <div className="messages-container" ref={messagesContainerRef}>
         {messages.length === 0 ? (
           <div className="empty-chat">
             <div className="empty-icon">
@@ -309,6 +333,23 @@ const Chat = ({ user, onLogout }) => {
             
             <div ref={messagesEndRef} />
           </div>
+        )}
+        
+        {/* Scroll to Bottom Button */}
+        {showScrollToBottom && (
+          <button 
+            className="scroll-to-bottom-btn"
+            onClick={scrollToBottom}
+            aria-label="Scroll to bottom"
+          >
+            <div className="scroll-btn-content">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M7 13l3 3 3-3"/>
+                <path d="M7 6l3 3 3-3"/>
+              </svg>
+              <span className="scroll-btn-text">Tin nhắn mới nhất</span>
+            </div>
+          </button>
         )}
       </div>
 
