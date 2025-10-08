@@ -56,34 +56,12 @@ export const useChat = (user) => {
     
     setLoading(true);
 
-    // Add temporary loading message for progress tracking
-    const loadingMessageId = `loading-${Date.now()}`;
-    const loadingMessage = {
-      id: loadingMessageId,
-      content: '🔍 Đang xử lý...',
-      timestamp: new Date().toISOString(),
-      sender: 'ai',
-      isLoading: true
-    };
-    setMessages(prev => [...prev, loadingMessage]);
-
-    // Progress update callback
-    const onProgressUpdate = (progressText) => {
-      setMessages(prev => 
-        prev.map(msg => 
-          msg.id === loadingMessageId 
-            ? { ...msg, content: progressText }
-            : msg
-        )
-      );
-    };
+    // No progress update callback needed - just use typing indicator
+    const onProgressUpdate = null;
 
     try {
-      // Send to AI service with progress callback
+      // Send to AI service
       const result = await chatService.sendMessage(content, attachments, user.employeeId, onProgressUpdate);
-      
-      // Remove loading message
-      setMessages(prev => prev.filter(msg => msg.id !== loadingMessageId));
       
       if (result.success) {
         const aiMessage = {
