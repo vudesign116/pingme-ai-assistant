@@ -80,6 +80,18 @@ export const useChat = (user) => {
         setMessages(prev => [...prev, aiMessage]);
         // Lưu AI response vào localStorage
         chatHistoryService.saveMessage(user.employeeId, aiMessage);
+        
+        // Cleanup blob URLs after successful send to prevent memory leaks
+        attachments.forEach(file => {
+          if (file.url && file.url.startsWith('blob:')) {
+            try {
+              URL.revokeObjectURL(file.url);
+              console.log(`🧹 Cleaned up blob URL after send: ${file.name}`);
+            } catch (error) {
+              console.warn(`Failed to cleanup blob URL for ${file.name}:`, error);
+            }
+          }
+        });
       } else {
         // Add error message
         const errorMessage = {

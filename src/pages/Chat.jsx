@@ -81,7 +81,10 @@ const Chat = ({ user, onLogout }) => {
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSendMessage();
+      // Additional validation before sending
+      if (inputMessage.trim() || attachments.length > 0) {
+        handleSendMessage();
+      }
     }
   };
 
@@ -133,6 +136,8 @@ const Chat = ({ user, onLogout }) => {
       return `${(responseTime / 1000).toFixed(1)}s`;
     }
   };
+
+
 
   const formatFileSize = (bytes) => {
     if (bytes === 0) return '0 Bytes';
@@ -314,13 +319,13 @@ const Chat = ({ user, onLogout }) => {
           <div className="attachments-preview">
             {attachments.map((file) => (
               <div key={file.id} className="attachment-item">
-                {file.type.startsWith('image/') && file.url ? (
+                {file.type.startsWith('image/') && file.url && !file.url.includes('blob:http://localhost:5173') ? (
                   <img 
                     src={file.url} 
                     alt={file.name} 
                     className="attachment-thumbnail"
                     onError={(e) => {
-                      console.warn(`Failed to load thumbnail: ${file.name}`);
+                      console.warn(`❌ Failed to load thumbnail: ${file.name} from ${file.url}`);
                       // Hide image and show file icon instead
                       e.target.style.display = 'none';
                       const parent = e.target.parentElement;
@@ -331,11 +336,14 @@ const Chat = ({ user, onLogout }) => {
                         }
                       }
                     }}
+                    onLoad={() => {
+                      console.log(`✅ Successfully loaded thumbnail: ${file.name}`);
+                    }}
                   />
                 ) : null}
                 <div 
                   className="file-attachment"
-                  style={{ display: file.type.startsWith('image/') && file.url ? 'none' : 'flex' }}
+                  style={{ display: file.type.startsWith('image/') && file.url && !file.url.includes('blob:http://localhost:5173') ? 'none' : 'flex' }}
                 >
                   <File size={16} />
                   <div className="file-info">

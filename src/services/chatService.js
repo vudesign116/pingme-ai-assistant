@@ -354,8 +354,23 @@ export const chatService = {
     // Create blob URL for preview with proper error handling
     let previewUrl = null;
     try {
-      previewUrl = URL.createObjectURL(file);
-      console.log(`🔗 Created blob URL for preview: ${file.name}`);
+      // Only create blob URL for images and if file is valid
+      if (file.type.startsWith('image/') && file.size > 0) {
+        previewUrl = URL.createObjectURL(file);
+        console.log(`🔗 Created blob URL for preview: ${file.name} -> ${previewUrl}`);
+        
+        // Set timeout to revoke URL after 5 minutes to prevent memory leaks
+        setTimeout(() => {
+          if (previewUrl) {
+            try {
+              URL.revokeObjectURL(previewUrl);
+              console.log(`⏰ Auto-revoked blob URL for: ${file.name}`);
+            } catch (e) {
+              console.warn(`Failed to auto-revoke blob URL:`, e);
+            }
+          }
+        }, 5 * 60 * 1000); // 5 minutes
+      }
     } catch (error) {
       console.warn(`⚠️ Could not create blob URL for ${file.name}:`, error);
     }

@@ -6,10 +6,14 @@ const ConnectionStatus = () => {
   const [lastCheck, setLastCheck] = useState(null);
 
   useEffect(() => {
-    checkConnection();
-    const interval = setInterval(checkConnection, 30000); // Check every 30 seconds
+    // Disable automatic connection checking to prevent webhook spam
+    // checkConnection();
+    // const interval = setInterval(checkConnection, 30000); // Check every 30 seconds
     
-    return () => clearInterval(interval);
+    // return () => clearInterval(interval);
+    
+    // Set status to disabled by default
+    setStatus('disabled');
   }, []);
 
   const checkConnection = async () => {
