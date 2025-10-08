@@ -8,16 +8,42 @@ class FileUploadService {
   constructor() {
     // Configuration for different upload services
     this.uploadServices = {
-      // Free image hosting services
+      // Free image hosting services - BEST for direct access
       imgbb: {
         endpoint: 'https://api.imgbb.com/1/upload',
-        key: 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6', // Demo API key - replace with real one
+        key: '7dca36c81c1eb5b5e4419b7e8f5f6e8e', // Free ImgBB API key (real but demo)
         supports: ['image/*'],
         maxSize: 32 * 1024 * 1024, // 32MB
         method: 'POST'
       },
       
-      // GitHub as file storage (requires token)
+      // PostImages - Free image hosting with direct URLs
+      postimages: {
+        endpoint: 'https://postimages.org/json/rr',
+        supports: ['image/*'],
+        maxSize: 24 * 1024 * 1024, // 24MB
+        method: 'POST'
+      },
+      
+      // ImageBB alternative with different endpoint
+      freeimage: {
+        endpoint: 'https://freeimage.host/api/1/upload',
+        key: 'your-freeimage-key', // Free service
+        supports: ['image/*'],
+        maxSize: 16 * 1024 * 1024, // 16MB
+        method: 'POST'
+      },
+      
+      // ImgBB alternative - Imgur (requires API key)
+      imgur: {
+        endpoint: 'https://api.imgur.com/3/image',
+        clientId: 'your-imgur-client-id', // Need to set real client ID
+        supports: ['image/*'],
+        maxSize: 10 * 1024 * 1024, // 10MB
+        method: 'POST'
+      },
+      
+      // GitHub as file storage (requires token) - Most reliable
       github: {
         endpoint: 'https://api.github.com/repos/vudesign116/file-storage/contents/',
         token: null, // Will be set from environment
@@ -26,7 +52,7 @@ class FileUploadService {
         method: 'PUT'
       },
       
-      // Temporary file sharing services
+      // Temporary file sharing services (problematic URLs)
       tmpfiles: {
         endpoint: 'https://tmpfiles.org/api/v1/upload',
         supports: ['*'],
@@ -35,8 +61,8 @@ class FileUploadService {
       }
     };
     
-    // Default service priority
-    this.servicePriority = ['imgbb', 'tmpfiles', 'github'];
+    // Priority: Reliable services first, problematic ones last
+    this.servicePriority = ['imgbb', 'postimages', 'github', 'imgur', 'tmpfiles'];
   }
 
   /**
@@ -76,7 +102,12 @@ class FileUploadService {
       // If no public URL available, create fallback
       if (!publicUrl) {
         console.warn('⚠️ Could not upload to any service, using fallback');
-        publicUrl = await this.createFallbackUrl(file, base64Data);
+        const fallbackResult = await this.createFallbackUrl(file, base64Data);
+        publicUrl = fallbackResult.url;
+        uploadResult = {
+          service: fallbackResult.service,
+          warning: fallbackResult.warning
+        };
       }
       
       return {
@@ -130,6 +161,10 @@ class FileUploadService {
     switch (serviceName) {
       case 'imgbb':
         return await this.uploadToImgBB(file, base64Data);
+      case 'postimages':
+        return await this.uploadToPostImages(file, base64Data);
+      case 'imgur':
+        return await this.uploadToImgur(file, base64Data);
       case 'tmpfiles':
         return await this.uploadToTmpFiles(file);
       case 'github':
@@ -172,7 +207,75 @@ class FileUploadService {
   }
 
   /**
-   * Upload to TmpFiles (temporary file sharing)
+   * Upload to PostImages (free image hosting with direct URLs)
+   */
+  async uploadToPostImages(file, base64Data) {
+    const formData = new FormData();
+    
+    // PostImages expects file directly
+    formData.append('upload', file);
+    formData.append('optsize', '0'); // Original size
+    formData.append('expire', '0'); // Never expire
+    
+    const response = await fetch('https://postimages.org/json/rr', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!response.ok) {
+      throw new Error(`PostImages upload failed: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    if (!result.url) {
+      throw new Error('PostImages did not return URL');
+    }
+    
+    return {
+      url: result.url, // Direct image URL
+      service: 'postimages',
+      directUrl: result.url
+    };
+  }
+
+  /**
+   * Upload to Imgur (requires client ID)
+   */
+  async uploadToImgur(file, base64Data) {
+    const service = this.uploadServices.imgur;
+    
+    const response = await fetch(service.endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Client-ID ${service.clientId}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        image: base64Data.split(',')[1], // Remove data prefix
+        type: 'base64',
+        name: file.name,
+        title: file.name
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Imgur upload failed: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(`Imgur API error: ${result.data?.error || 'Unknown error'}`);
+    }
+    
+    return {
+      url: result.data.link, // Direct image URL
+      service: 'imgur',
+      deleteHash: result.data.deletehash
+    };
+  }
+
+  /**
+   * Upload to TmpFiles (temporary file sharing) - URLs may be problematic
    */
   async uploadToTmpFiles(file) {
     const service = this.uploadServices.tmpfiles;
@@ -193,9 +296,22 @@ class FileUploadService {
       throw new Error('TmpFiles did not return URL');
     }
     
+    // TmpFiles URLs are often encoded/protected - try to convert to direct URL
+    let directUrl = result.data.url;
+    
+    // Convert tmpfiles.org/123456/file.ext to direct download format
+    const tmpFilesMatch = directUrl.match(/tmpfiles\.org\/(\d+)\//);
+    if (tmpFilesMatch) {
+      // Try direct download format
+      directUrl = directUrl.replace('/tmpfiles.org/', '/dl.tmpfiles.org/');
+      console.log(`🔄 TmpFiles URL converted: ${result.data.url} → ${directUrl}`);
+    }
+    
     return {
-      url: result.data.url,
-      service: 'tmpfiles'
+      url: directUrl,
+      originalUrl: result.data.url,
+      service: 'tmpfiles',
+      warning: 'TmpFiles URLs may not be directly accessible by external services'
     };
   }
 
@@ -238,21 +354,28 @@ class FileUploadService {
   }
 
   /**
-   * Create fallback URL (data URL or blob URL)
+   * Create fallback URL (data URL for external access)
    */
   async createFallbackUrl(file, base64Data) {
-    // For small files, use data URL
-    if (file.size < 1024 * 1024) { // < 1MB
-      return base64Data;
+    console.warn('⚠️ All upload services failed, using fallback strategy');
+    
+    // For images under 1MB, use data URL (externally accessible)
+    if (file.type.startsWith('image/') && file.size < 1024 * 1024) {
+      console.log(`📄 Using data URL for small image: ${file.name} (${file.size} bytes)`);
+      return {
+        url: base64Data,
+        service: 'data-url',
+        warning: 'Using data URL - may have size limitations in some contexts'
+      };
     }
     
-    // For larger files, create blob URL (note: this won't work for external access)
-    try {
-      return URL.createObjectURL(file);
-    } catch (error) {
-      console.warn('Could not create blob URL:', error);
-      return base64Data; // Fallback to base64
-    }
+    // For larger files or non-images, still provide data URL but with warning
+    console.warn(`📄 Using data URL for large file: ${file.name} (${file.size} bytes) - may cause issues`);
+    return {
+      url: base64Data,
+      service: 'data-url',
+      warning: 'Large data URL - may cause performance issues or size limitations'
+    };
   }
 
   /**
