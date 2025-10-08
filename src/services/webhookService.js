@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Webhook URL - Test version for debugging
-const WEBHOOK_URL = 'https://kpspa.app.n8n.cloud/webhook-test/e9bbd901-ec61-424a-963f-8b63a7f9b17d';
+// Webhook URL - Production version
+const WEBHOOK_URL = 'https://kpspa.app.n8n.cloud/webhook/e9bbd901-ec61-424a-963f-8b63a7f9b17d';
 const PROXY_WEBHOOK_URL = '/api/webhook'; // Use proxy to avoid CORS in development
 
 // Create axios instance with default config
