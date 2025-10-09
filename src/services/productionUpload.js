@@ -146,9 +146,9 @@ class ProductionUploadService {
       throw new Error('Tmpfiles did not return valid response');
     }
     
-    // Transform the API URL to a direct download URL
+    // Transform the API URL to a direct URL that can be downloaded
     // Input URL: https://tmpfiles.org/api/v1/dl/3602302
-    // Output URL: https://tmpfiles.org/dl/3602302/filename.ext
+    // Output URL: http://tmpfiles.org/3602302/filename.ext (direct download URL)
     let directUrl = result.data.url;
     
     // Extract the ID from the API URL (like 3602302)
@@ -156,8 +156,9 @@ class ProductionUploadService {
     if (matches && matches[1]) {
       const fileId = matches[1];
       const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      directUrl = `https://tmpfiles.org/dl/${fileId}/${safeFileName}`;
-      console.log(`🔄 Transformed tmpfiles URL: ${directUrl}`);
+      // Format as a direct download URL
+      directUrl = `http://tmpfiles.org/${fileId}/${safeFileName}`;
+      console.log(`🔄 Transformed tmpfiles URL to direct download URL: ${directUrl}`);
     }
 
     return {

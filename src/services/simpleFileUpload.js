@@ -60,12 +60,12 @@ class FileUploadService {
     // This avoids CORS issues with binary uploads
     console.log('🌍 Production environment - using two-step upload process');
     
-    // STEP 1: Upload to tmpfiles first to get a public URL
+    // STEP 1: Upload to tmpfiles first to get a public URL that can be directly downloaded
     let fileUrl = null;
     let uploadResult = null;
     
     try {
-      console.log('🔄 Step 1: Uploading to tmpfiles to get public URL...');
+      console.log('🔄 Uploading to tmpfiles to get direct download URL...');
       const tmp = await productionUpload.uploadToTmpfiles?.(file);
       if (tmp && tmp.url) {
         console.log('✅ Tmpfiles upload successful:', tmp);
@@ -84,6 +84,11 @@ class FileUploadService {
           type: tmp.fileType || file.type,
           uploadService: 'tmpfiles'
         };
+        
+        // Ngay lập tức trả về kết quả mà không gửi lên webhook
+        // URL đã được tạo ở định dạng http://tmpfiles.org/{id}/{filename} có thể tải về trực tiếp
+        console.log('✅ Returning direct download URL without sending to webhook:', fileUrl);
+        return uploadResult;
       }
     } catch (e) {
       console.warn('❌ Tmpfiles upload failed, trying imgur:', e.message);
@@ -101,46 +106,18 @@ class FileUploadService {
             size: file.size,
             type: file.type
           };
+          
+          // Ngay lập tức trả về kết quả mà không gửi lên webhook
+          console.log('✅ Returning Imgur URL without sending to webhook:', fileUrl);
+          return uploadResult;
         }
       } catch (e2) {
         console.warn('❌ Imgur fallback failed:', e2.message);
       }
     }
     
-    // If we got a URL, proceed to Step 2
-    if (fileUrl && uploadResult) {
-      // STEP 2: Send the URL to webhook (avoids CORS issues)
-      try {
-        console.log('🔄 Step 2: Sending file URL to webhook...');
-        const meta = { source: 'web_app', purpose: 'chat_attachment' };
-        const webhookResponse = await sendFileUrlToWebhook(
-          fileUrl, 
-          uploadResult.fileName || file.name,
-          uploadResult.fileType || file.type,
-          uploadResult.fileSize || file.size,
-          meta
-        );
-        
-        if (webhookResponse?.success) {
-          console.log('✅ Webhook received URL successfully:', webhookResponse);
-          // Use the URL from webhook if provided, otherwise keep original URL
-          const finalUrl = webhookResponse.url || fileUrl;
-          
-          return {
-            ...uploadResult,
-            url: finalUrl,
-            webhookProcessed: true
-          };
-        } else {
-          console.warn('⚠️ Webhook URL processing failed, using direct URL:', webhookResponse?.error);
-          // Still return the file URL even if webhook processing failed
-          return uploadResult;
-        }
-      } catch (webhookErr) {
-        console.warn('⚠️ Error sending URL to webhook, using direct URL:', webhookErr.message);
-        return uploadResult;
-      }
-    }
+    // Ghi chú: URL sẽ được gửi đến webhook chỉ khi người dùng bấm nút Send
+    // Việc này sẽ được xử lý trong sendMessage của chatService.js, không phải ở đây
 
     // REMOVED: No longer try direct binary upload since we now have tmpfiles or imgur URL
     // Just use the URL we already obtained

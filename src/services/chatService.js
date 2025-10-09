@@ -1,4 +1,4 @@
-import { webhookService } from './webhookService';
+import { webhookService, sendFileUrlToWebhook } from './webhookService';
 import simpleFileUpload from './simpleFileUpload.js';
 
 export const chatService = {
@@ -78,6 +78,27 @@ export const chatService = {
     console.log('📤 Sending message:', message);
     
     try {
+      // Trước tiên, gửi URLs của tất cả các file lên webhook (vì người dùng đã bấm nút Send)
+      if (files && files.length > 0) {
+        console.log('🔄 Sending file URLs to webhook since user clicked Send button...');
+        for (const file of files) {
+          try {
+            const meta = { source: 'web_app', purpose: 'chat_attachment' };
+            await sendFileUrlToWebhook(
+              file.url, 
+              file.fileName || file.name,
+              file.fileType || file.type,
+              file.fileSize || file.size,
+              meta
+            );
+            console.log(`✅ Notified webhook about file: ${file.url}`);
+          } catch (err) {
+            console.warn(`⚠️ Could not notify webhook about file ${file.url}:`, err.message);
+            // Tiếp tục xử lý các file khác ngay cả khi có lỗi
+          }
+        }
+      }
+      
       const imageFiles = files.filter(f => f.category === 'image');
       const documentFiles = files.filter(f => f.category === 'document');
       
