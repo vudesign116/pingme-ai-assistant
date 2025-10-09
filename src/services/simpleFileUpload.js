@@ -4,6 +4,7 @@
  */
 
 import productionUpload from './productionUpload.js';
+import { uploadBinaryFileToWebhook } from './webhookService.js';
 
 class FileUploadService {
   constructor() {
@@ -55,9 +56,45 @@ class FileUploadService {
       }
     }
     
-    // For production, use imgur (no CORS restrictions)
-    console.log('🌍 Production environment - using imgur service');
-    return await this.uploadToImgur(file);
+      // For production, first try sending binary to our n8n webhook to receive an HTTP URL back
+      console.log('🌍 Production environment - uploading binary to webhook to get HTTP URL');
+      try {
+        const meta = { source: 'web_app', purpose: 'chat_attachment' };
+        const viaWebhook = await uploadBinaryFileToWebhook(file, meta);
+        if (viaWebhook?.success && viaWebhook.url) {
+          return {
+            success: true,
+            url: viaWebhook.url,
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.type,
+            uploadService: 'webhook-binary'
+          };
+        }
+        console.warn('⚠️ Webhook binary upload did not return URL, falling back...', viaWebhook);
+      } catch (e) {
+        console.warn('❌ Webhook binary upload failed, falling back:', e.message);
+      }
+
+      // Fallbacks (still try without CORS-sensitive hosts). Keep imgur as last resort, then base64
+      try {
+        const tmp = await productionUpload.uploadToTmpfiles?.(file);
+        if (tmp && tmp.url) {
+          return { success: true, url: tmp.url, fileName: file.name, fileSize: file.size, fileType: file.type, uploadService: 'tmpfiles' };
+        }
+      } catch (e) {
+        console.warn('❌ Tmpfiles fallback failed:', e.message);
+      }
+
+      try {
+        const im = await this.uploadToImgur(file);
+        if (im && im.success && im.url) return im;
+      } catch (e) {
+        console.warn('❌ Imgur fallback failed:', e.message);
+      }
+
+      console.log('🔄 Final fallback to base64 conversion');
+      return await this.convertToBase64(file);
   }  /**
    * Upload via proxy server to get real HTTP URLs on localhost
    * This bypasses CORS issues and returns actual HTTP/HTTPS URLs
@@ -205,36 +242,35 @@ class FileUploadService {
   }
 
   /**
-   * Upload to imgur API - More reliable, no CORS restrictions
+   * Upload to imgur API using form data (more reliable)
    * @param {File} file - File to upload
    * @returns {Promise<Object>} - Result with HTTP URL
    */
   async uploadToImgur(file) {
     try {
-      // Convert file to base64 first
-      const base64 = await this.fileToBase64(file);
-      const base64Data = base64.split(',')[1]; // Remove data:image/xxx;base64, prefix
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('type', 'file');
       
       console.log(`🔄 Uploading to imgur...`);
       const response = await fetch('https://api.imgur.com/3/image', {
         method: 'POST',
         headers: {
-          'Authorization': 'Client-ID 546c25a59c58ad7', // Public client ID
-          'Content-Type': 'application/json',
+          'Authorization': 'Client-ID c9a6efb3d7932fd', // Different public client ID
         },
-        body: JSON.stringify({
-          image: base64Data,
-          type: 'base64'
-        })
+        body: formData
       });
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Imgur error response:', errorText);
         throw new Error(`Imgur upload failed: ${response.status}`);
       }
       
       const result = await response.json();
       
       if (!result.success || !result.data || !result.data.link) {
+        console.error('Imgur result:', result);
         throw new Error('Imgur did not return valid URL');
       }
       
@@ -249,7 +285,9 @@ class FileUploadService {
       };
     } catch (error) {
       console.error('❌ Imgur upload failed:', error);
-      throw error;
+      // Fallback to base64 conversion if imgur fails
+      console.log('🔄 Falling back to base64 conversion...');
+      return await this.convertToBase64(file);
     }
   }
 

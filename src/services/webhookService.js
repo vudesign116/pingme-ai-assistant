@@ -69,6 +69,52 @@ const getWebhookUrl = () => {
   }
 };
 
+// Upload binary file via multipart/form-data to webhook (n8n handles storage and returns URL)
+// Returns: { success: boolean, url?: string, data?: any, error?: string }
+export async function uploadBinaryFileToWebhook(file, extraMeta = {}) {
+  try {
+    const webhookUrl = getWebhookUrl();
+
+    const formData = new FormData();
+    formData.append('action', 'file_upload_binary');
+    formData.append('file', file, file.name);
+    formData.append('fileName', file.name);
+    formData.append('fileType', file.type || 'application/octet-stream');
+    formData.append('fileSize', String(file.size || 0));
+
+    // Optional metadata to help n8n routing
+    Object.entries(extraMeta || {}).forEach(([k, v]) => {
+      if (v !== undefined && v !== null) formData.append(String(k), String(v));
+    });
+
+    // Use fetch instead of axios to avoid JSON headers
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const isJson = (res.headers.get('content-type') || '').includes('application/json');
+    const body = isJson ? await res.json() : await res.text();
+
+    if (!res.ok) {
+      console.error('❌ Webhook binary upload failed', { status: res.status, body });
+      return { success: false, error: `Webhook upload failed: ${res.status}`, data: body };
+    }
+
+    // Try common shapes { url }, { data: { url } }, { fileUrl }, etc.
+    const url = (body && (body.url || body.fileUrl || body.file_url || body?.data?.url)) || null;
+    if (!url || typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
+      console.warn('⚠️ Webhook response does not contain a valid HTTP URL. Body:', body);
+      return { success: false, error: 'Webhook did not return a valid URL', data: body };
+    }
+
+    return { success: true, url, data: body };
+  } catch (err) {
+    console.error('❌ uploadBinaryFileToWebhook error:', err);
+    return { success: false, error: err.message || 'Unknown upload error' };
+  }
+}
+
 // Helper function to format and clean AI response text
 const formatAIResponse = (text) => {
   if (!text || typeof text !== 'string') return text;
