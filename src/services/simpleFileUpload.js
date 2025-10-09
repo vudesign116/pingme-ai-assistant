@@ -142,31 +142,14 @@ class FileUploadService {
       }
     }
 
-    // Try direct binary webhook upload as a fallback (likely won't work due to CORS)
-    try {
-      console.log('⚠️ No URL obtained yet, trying direct webhook binary upload (may fail due to CORS)...');
-      const meta = { source: 'web_app', purpose: 'chat_attachment' };
-      const viaWebhook = await uploadBinaryFileToWebhook(file, meta);
-      if (viaWebhook?.success && viaWebhook.url) {
-        console.log('✅ Direct webhook binary upload successful:', viaWebhook);
-        return {
-          success: true,
-          url: viaWebhook.url,
-          id: `file-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-          fileName: file.name,
-          name: file.name, 
-          fileSize: file.size,
-          size: file.size,
-          fileType: file.type,
-          type: file.type,
-          mimeType: file.type,
-          category: file.type.startsWith('image/') ? 'image' : 'document',
-          uploadService: 'webhook-binary'
-        };
-      }
-      console.warn('⚠️ Direct webhook binary upload failed, continuing to fallbacks...', viaWebhook);
-    } catch (e) {
-      console.warn('❌ Direct webhook binary upload failed:', e.message);
+    // REMOVED: No longer try direct binary upload since we now have tmpfiles or imgur URL
+    // Just use the URL we already obtained
+    console.log('ℹ️ Using URL from tmpfiles/imgur directly since webhook URL processing is optional');
+    
+    // If we get here and don't have a fileUrl, try base64 as absolute last resort
+    if (!fileUrl) {
+      console.log('⚠️ No URL obtained from any method, falling back to base64...');
+      return await this.convertToBase64(file);
     }
 
       try {

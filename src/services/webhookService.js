@@ -92,37 +92,68 @@ export async function sendFileUrlToWebhook(fileUrl, fileName, fileType, fileSize
     };
 
     // Use axios with JSON which handles CORS better than fetch with FormData
-    const response = await apiClient.post(webhookUrl, payload);
-    
-    console.log(`🔄 Webhook URL response status: ${response.status}`, response.data);
-
-    if (response.status < 200 || response.status >= 300) {
-      console.error('❌ Webhook URL upload failed', { status: response.status, data: response.data });
-      return { success: false, error: `Webhook failed: ${response.status}`, data: response.data };
+    try {
+      const response = await apiClient.post(webhookUrl, payload);
+      console.log(`🔄 Webhook URL response status: ${response.status}`, response.data);
+  
+      if (response.status < 200 || response.status >= 300) {
+        console.error('❌ Webhook URL upload failed', { status: response.status, data: response.data });
+        return { success: false, error: `Webhook failed: ${response.status}`, data: response.data };
+      }
+    } catch (axiosError) {
+      // If webhook fails with CORS or network error, just return the original URL
+      console.warn('⚠️ Webhook communication error (ignoring):', axiosError.message);
+      return { 
+        success: true, 
+        url: fileUrl, // Return the original URL we already have
+        fileName: fileName,
+        fileSize: fileSize,
+        fileType: fileType,
+        mimeType: fileType,
+        category: fileType?.startsWith('image/') ? 'image' : 'document',
+        webhookError: axiosError.message,
+        data: { error: axiosError.message }
+      };
     }
 
-    // If webhook returns a different URL, use it, otherwise keep original
-    const resultUrl = (response.data && (
-      response.data.url || 
-      response.data.fileUrl || 
-      response.data.file_url || 
-      response.data?.data?.url ||
-      response.data?.result?.url ||
-      response.data?.response?.url
-    )) || fileUrl; // Default to original URL if no new URL returned
-    
-    console.log(`✅ Webhook URL upload successful: ${resultUrl}`);
-    
-    return { 
-      success: true, 
-      url: resultUrl, 
-      fileName: fileName,
-      fileSize: fileSize,
-      fileType: fileType,
-      mimeType: fileType,
-      category: fileType?.startsWith('image/') ? 'image' : 'document',
-      data: response.data 
-    };
+    // Response is successful, extract URL or use original
+    try {
+      // If webhook returns a different URL, use it, otherwise keep original
+      const resultUrl = (response?.data && (
+        response.data.url || 
+        response.data.fileUrl || 
+        response.data.file_url || 
+        response.data?.data?.url ||
+        response.data?.result?.url ||
+        response.data?.response?.url
+      )) || fileUrl; // Default to original URL if no new URL returned
+      
+      console.log(`✅ Webhook URL upload successful: ${resultUrl}`);
+      
+      return { 
+        success: true, 
+        url: resultUrl, 
+        fileName: fileName,
+        fileSize: fileSize,
+        fileType: fileType,
+        mimeType: fileType,
+        category: fileType?.startsWith('image/') ? 'image' : 'document',
+        data: response?.data || {}
+      };
+    } catch (error) {
+      // Just return the original URL if anything goes wrong
+      console.warn('⚠️ Error processing webhook response, using original URL', error);
+      return { 
+        success: true, 
+        url: fileUrl,
+        fileName: fileName,
+        fileSize: fileSize,
+        fileType: fileType,
+        mimeType: fileType,
+        category: fileType?.startsWith('image/') ? 'image' : 'document',
+        error: error.message
+      };
+    }
   } catch (err) {
     console.error('❌ sendFileUrlToWebhook error:', err);
     return { success: false, error: err.message || 'Unknown upload error' };
@@ -162,8 +193,25 @@ export async function uploadBinaryFileToWebhook(file, extraMeta = {}) {
       mode: 'cors',
     });
 
-    const isJson = (res.headers.get('content-type') || '').includes('application/json');
-    const body = isJson ? await res.json() : await res.text();
+    // Safely handle response parsing
+    let body = null;
+    const contentType = res.headers.get('content-type') || '';
+    const isJson = contentType.includes('application/json');
+    
+    try {
+      if (isJson) {
+        // Try to parse as JSON safely
+        const text = await res.text();
+        console.log('Response text:', text);
+        body = text && text.trim() ? JSON.parse(text) : {};
+      } else {
+        // Just get text
+        body = await res.text();
+      }
+    } catch (parseError) {
+      console.error('Error parsing response:', parseError);
+      body = `Error parsing response: ${parseError.message}`;
+    }
     
     console.log(`🔄 Webhook response status: ${res.status}, isJson: ${isJson}`, body);
 
