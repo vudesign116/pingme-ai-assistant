@@ -478,7 +478,7 @@ const Chat = ({ user, onLogout }) => {
         <input
           ref={imageInputRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
           multiple
           style={{ display: 'none' }}
           onChange={async (e) => {
@@ -499,6 +499,7 @@ const Chat = ({ user, onLogout }) => {
           ref={fileInputRef}
           type="file"
           multiple
+          accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           style={{ display: 'none' }}
           onChange={async (e) => {
             const files = Array.from(e.target.files);
