@@ -49,15 +49,15 @@ class FileUploadService {
       try {
         return await this.uploadViaProxy(file);
       } catch (error) {
-        console.warn('❌ Proxy upload failed, falling back to base64:', error.message);
-        // Fallback to base64 conversion
-        return await this.convertToBase64(file);
+        console.warn('❌ Proxy upload failed, falling back to file.io:', error.message);
+        // Fallback to file.io service
+        return await this.uploadToFileIO(file);
       }
     }
     
-    // For production, use base64 conversion (temporary CORS workaround)
-    console.log('🌍 Production environment - using base64 conversion (CORS workaround)');
-    return await this.convertToBase64(file);
+    // For production, use file.io (no CORS restrictions)
+    console.log('🌍 Production environment - using file.io service');
+    return await this.uploadToFileIO(file);
   }  /**
    * Upload via proxy server to get real HTTP URLs on localhost
    * This bypasses CORS issues and returns actual HTTP/HTTPS URLs
@@ -205,7 +205,48 @@ class FileUploadService {
   }
 
   /**
-   * Convert file to base64 data URL (fallback for CORS issues)
+   * Upload to file.io - No CORS restrictions, returns HTTP URLs
+   * @param {File} file - File to upload
+   * @returns {Promise<Object>} - Result with HTTP URL
+   */
+  async uploadToFileIO(file) {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      console.log(`🔄 Uploading to file.io...`);
+      const response = await fetch('https://file.io/', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error(`file.io upload failed: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (!result.success || !result.link) {
+        throw new Error('file.io did not return valid URL');
+      }
+      
+      console.log(`✅ Successfully uploaded to file.io: ${result.link}`);
+      return {
+        success: true,
+        url: result.link, // Real HTTP/HTTPS URL
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        uploadService: 'file.io'
+      };
+    } catch (error) {
+      console.error('❌ file.io upload failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Convert file to base64 data URL (kept as last resort fallback)
    * @param {File} file - File to convert
    * @returns {Promise<Object>} - Result with data URL
    */
