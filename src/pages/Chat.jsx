@@ -120,10 +120,26 @@ const Chat = ({ user, onLogout }) => {
   const handleFileUpload = async (file) => {
     const result = await uploadFile(file);
     if (result.success) {
-      setAttachments(prev => [...prev, result.data]);
-      showToast(`Đã thêm ${file.name}`, 'success');
+      // Ensure the attachment has all required fields
+      const attachment = {
+        id: result.data?.id || `file-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        name: result.data?.name || result.data?.fileName || file.name,
+        fileName: result.data?.fileName || result.data?.name || file.name,
+        type: result.data?.type || result.data?.fileType || result.data?.mimeType || file.type,
+        fileType: result.data?.fileType || result.data?.type || result.data?.mimeType || file.type,
+        mimeType: result.data?.mimeType || result.data?.type || file.type,
+        size: result.data?.size || result.data?.fileSize || file.size,
+        fileSize: result.data?.fileSize || result.data?.size || file.size,
+        url: result.data?.url || '',
+        category: result.data?.category || (file.type.startsWith('image/') ? 'image' : 'document'),
+        uploadService: result.data?.uploadService || 'unknown'
+      };
+      
+      console.log('✅ File processed successfully:', attachment);
+      setAttachments(prev => [...prev, attachment]);
+      showToast(`Đã thêm ${attachment.name}`, 'success');
     } else {
-      showToast(result.message, 'error');
+      showToast(result.message || 'Upload failed', 'error');
     }
   };
 
@@ -267,37 +283,46 @@ const Chat = ({ user, onLogout }) => {
                     
                     {message.attachments && message.attachments.length > 0 && (
                       <div className="message-attachments">
-                        {message.attachments.map((file) => (
-                          <div key={file.id} className="attachment-preview">
-                            {file.type.startsWith('image/') && file.url ? (
-                              <img 
-                                src={file.url} 
-                                alt={file.name} 
-                                className="attachment-image"
-                                onError={(e) => {
-                                  console.warn(`Failed to load image: ${file.name}`);
-                                  // Hide the failed image
-                                  e.target.style.display = 'none';
-                                  // Show fallback file icon by updating parent
-                                  const parent = e.target.parentElement;
-                                  if (parent) {
-                                    const fallback = parent.querySelector('.attachment-file');
-                                    if (fallback) {
-                                      fallback.style.display = 'flex';
+                        {message.attachments.map((file) => {
+                          // Handle potentially missing file data to prevent type errors
+                          const fileId = file?.id || `file-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+                          const fileName = file?.name || file?.fileName || 'Unknown File';
+                          const fileType = file?.type || file?.fileType || file?.mimeType || 'application/octet-stream';
+                          const fileUrl = file?.url || '';
+                          const isImage = fileType.startsWith('image/');
+                          
+                          return (
+                            <div key={fileId} className="attachment-preview">
+                              {isImage && fileUrl ? (
+                                <img 
+                                  src={fileUrl} 
+                                  alt={fileName} 
+                                  className="attachment-image"
+                                  onError={(e) => {
+                                    console.warn(`Failed to load image: ${fileName} from ${fileUrl}`);
+                                    // Hide the failed image
+                                    e.target.style.display = 'none';
+                                    // Show fallback file icon by updating parent
+                                    const parent = e.target.parentElement;
+                                    if (parent) {
+                                      const fallback = parent.querySelector('.attachment-file');
+                                      if (fallback) {
+                                        fallback.style.display = 'flex';
+                                      }
                                     }
-                                  }
-                                }}
-                              />
-                            ) : null}
-                            <div 
-                              className="attachment-file" 
-                              style={{ display: file.type.startsWith('image/') && file.url ? 'none' : 'flex' }}
-                            >
-                              <File size={16} />
-                              <span>{file.name}</span>
+                                  }}
+                                />
+                              ) : null}
+                              <div 
+                                className="attachment-file" 
+                                style={{ display: isImage && fileUrl ? 'none' : 'flex' }}
+                              >
+                                <File size={16} />
+                                <span>{fileName}</span>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -358,48 +383,59 @@ const Chat = ({ user, onLogout }) => {
         {/* Attachments Preview */}
         {attachments.length > 0 && (
           <div className="attachments-preview">
-            {attachments.map((file) => (
-              <div key={file.id} className="attachment-item">
-                {file.type.startsWith('image/') && file.url && !file.url.includes('blob:http://localhost:5173') ? (
-                  <img 
-                    src={file.url} 
-                    alt={file.name} 
-                    className="attachment-thumbnail"
-                    onError={(e) => {
-                      console.warn(`❌ Failed to load thumbnail: ${file.name} from ${file.url}`);
-                      // Hide image and show file icon instead
-                      e.target.style.display = 'none';
-                      const parent = e.target.parentElement;
-                      if (parent) {
-                        const fallback = parent.querySelector('.file-attachment');
-                        if (fallback) {
-                          fallback.style.display = 'flex';
+            {attachments.map((file) => {
+              // Handle potentially missing file data to prevent type errors
+              const fileId = file?.id || `file-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+              const fileName = file?.name || file?.fileName || 'Unknown File';
+              const fileType = file?.type || file?.fileType || file?.mimeType || 'application/octet-stream';
+              const fileSize = file?.size || file?.fileSize || 0;
+              const fileUrl = file?.url || '';
+              const isImage = fileType.startsWith('image/');
+              const isBlobUrl = fileUrl.startsWith('blob:');
+              
+              return (
+                <div key={fileId} className="attachment-item">
+                  {isImage && fileUrl && !isBlobUrl ? (
+                    <img 
+                      src={fileUrl} 
+                      alt={fileName} 
+                      className="attachment-thumbnail"
+                      onError={(e) => {
+                        console.warn(`❌ Failed to load thumbnail: ${fileName} from ${fileUrl}`);
+                        // Hide image and show file icon instead
+                        e.target.style.display = 'none';
+                        const parent = e.target.parentElement;
+                        if (parent) {
+                          const fallback = parent.querySelector('.file-attachment');
+                          if (fallback) {
+                            fallback.style.display = 'flex';
+                          }
                         }
-                      }
-                    }}
-                    onLoad={() => {
-                      console.log(`✅ Successfully loaded thumbnail: ${file.name}`);
-                    }}
-                  />
-                ) : null}
-                <div 
-                  className="file-attachment"
-                  style={{ display: file.type.startsWith('image/') && file.url && !file.url.includes('blob:http://localhost:5173') ? 'none' : 'flex' }}
-                >
-                  <File size={16} />
-                  <div className="file-info">
-                    <span className="file-name">{file.name}</span>
-                    <span className="file-size">{formatFileSize(file.size)}</span>
+                      }}
+                      onLoad={() => {
+                        console.log(`✅ Successfully loaded thumbnail: ${fileName}`);
+                      }}
+                    />
+                  ) : null}
+                  <div 
+                    className="file-attachment"
+                    style={{ display: isImage && fileUrl && !isBlobUrl ? 'none' : 'flex' }}
+                  >
+                    <File size={16} />
+                    <div className="file-info">
+                      <span className="file-name">{fileName}</span>
+                      <span className="file-size">{formatFileSize(fileSize)}</span>
+                    </div>
                   </div>
+                  <button 
+                    className="remove-attachment"
+                    onClick={() => removeAttachment(fileId)}
+                  >
+                    <X size={14} />
+                  </button>
                 </div>
-                <button 
-                  className="remove-attachment"
-                  onClick={() => removeAttachment(file.id)}
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

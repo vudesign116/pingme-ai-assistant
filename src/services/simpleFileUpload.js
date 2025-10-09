@@ -62,12 +62,19 @@ class FileUploadService {
         const meta = { source: 'web_app', purpose: 'chat_attachment' };
         const viaWebhook = await uploadBinaryFileToWebhook(file, meta);
         if (viaWebhook?.success && viaWebhook.url) {
+          console.log('✅ Webhook binary upload successful:', viaWebhook);
           return {
             success: true,
             url: viaWebhook.url,
+            id: `file-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
             fileName: file.name,
+            name: file.name, 
             fileSize: file.size,
+            size: file.size,
             fileType: file.type,
+            type: file.type,
+            mimeType: file.type,
+            category: file.type.startsWith('image/') ? 'image' : 'document',
             uploadService: 'webhook-binary'
           };
         }
@@ -80,7 +87,17 @@ class FileUploadService {
       try {
         const tmp = await productionUpload.uploadToTmpfiles?.(file);
         if (tmp && tmp.url) {
-          return { success: true, url: tmp.url, fileName: file.name, fileSize: file.size, fileType: file.type, uploadService: 'tmpfiles' };
+          console.log('✅ Tmpfiles upload successful:', tmp);
+          return { 
+            success: true, 
+            url: tmp.url, 
+            fileName: tmp.fileName || file.name, 
+            fileSize: tmp.fileSize || file.size, 
+            fileType: tmp.fileType || file.type,
+            mimeType: tmp.mimeType || file.type,
+            category: tmp.category || (file.type.startsWith('image/') ? 'image' : 'document'),
+            uploadService: 'tmpfiles' 
+          };
         }
       } catch (e) {
         console.warn('❌ Tmpfiles fallback failed:', e.message);

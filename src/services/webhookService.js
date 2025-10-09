@@ -75,12 +75,18 @@ export async function uploadBinaryFileToWebhook(file, extraMeta = {}) {
   try {
     const webhookUrl = getWebhookUrl();
 
+    console.log(`🔄 Starting binary upload to webhook: ${file.name} (${file.size} bytes)`);
+
     const formData = new FormData();
     formData.append('action', 'file_upload_binary');
     formData.append('file', file, file.name);
     formData.append('fileName', file.name);
     formData.append('fileType', file.type || 'application/octet-stream');
     formData.append('fileSize', String(file.size || 0));
+    
+    // Add category for easier handling in n8n
+    const isImage = file.type.startsWith('image/');
+    formData.append('category', isImage ? 'image' : 'document');
 
     // Optional metadata to help n8n routing
     Object.entries(extraMeta || {}).forEach(([k, v]) => {
@@ -91,10 +97,14 @@ export async function uploadBinaryFileToWebhook(file, extraMeta = {}) {
     const res = await fetch(webhookUrl, {
       method: 'POST',
       body: formData,
+      // Add CORS mode to help with cross-origin requests
+      mode: 'cors',
     });
 
     const isJson = (res.headers.get('content-type') || '').includes('application/json');
     const body = isJson ? await res.json() : await res.text();
+    
+    console.log(`🔄 Webhook response status: ${res.status}, isJson: ${isJson}`, body);
 
     if (!res.ok) {
       console.error('❌ Webhook binary upload failed', { status: res.status, body });
@@ -102,13 +112,32 @@ export async function uploadBinaryFileToWebhook(file, extraMeta = {}) {
     }
 
     // Try common shapes { url }, { data: { url } }, { fileUrl }, etc.
-    const url = (body && (body.url || body.fileUrl || body.file_url || body?.data?.url)) || null;
+    const url = (body && (
+      body.url || 
+      body.fileUrl || 
+      body.file_url || 
+      body?.data?.url ||
+      body?.result?.url ||
+      body?.response?.url
+    )) || null;
+    
     if (!url || typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
       console.warn('⚠️ Webhook response does not contain a valid HTTP URL. Body:', body);
       return { success: false, error: 'Webhook did not return a valid URL', data: body };
     }
 
-    return { success: true, url, data: body };
+    console.log(`✅ Webhook binary upload successful: ${url}`);
+    
+    return { 
+      success: true, 
+      url, 
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      mimeType: file.type,
+      category: isImage ? 'image' : 'document',
+      data: body 
+    };
   } catch (err) {
     console.error('❌ uploadBinaryFileToWebhook error:', err);
     return { success: false, error: err.message || 'Unknown upload error' };

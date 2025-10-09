@@ -140,12 +140,33 @@ class ProductionUploadService {
     }
 
     const result = await response.json();
-    if (!result.status === 'success' || !result.data || !result.data.url) {
+    console.log('📦 Tmpfiles API response:', result);
+    
+    if (result.status !== 'success' || !result.data || !result.data.url) {
       throw new Error('Tmpfiles did not return valid response');
+    }
+    
+    // Transform the API URL to a direct download URL
+    // Input URL: https://tmpfiles.org/api/v1/dl/3602302
+    // Output URL: https://tmpfiles.org/dl/3602302/filename.ext
+    let directUrl = result.data.url;
+    
+    // Extract the ID from the API URL (like 3602302)
+    const matches = directUrl.match(/\/dl\/(\d+)$/);
+    if (matches && matches[1]) {
+      const fileId = matches[1];
+      const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      directUrl = `https://tmpfiles.org/dl/${fileId}/${safeFileName}`;
+      console.log(`🔄 Transformed tmpfiles URL: ${directUrl}`);
     }
 
     return {
-      url: result.data.url,
+      url: directUrl,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      mimeType: file.type,
+      category: file.type.startsWith('image/') ? 'image' : 'document',
       service: 'tmpfiles'
     };
   }
