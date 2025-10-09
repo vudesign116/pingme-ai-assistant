@@ -4,7 +4,7 @@
  */
 
 import productionUpload from './productionUpload.js';
-import { uploadBinaryFileToWebhook } from './webhookService.js';
+import { uploadBinaryFileToWebhook, sendFileUrlToWebhook } from './webhookService.js';
 
 class FileUploadService {
   constructor() {
@@ -56,52 +56,118 @@ class FileUploadService {
       }
     }
     
-      // For production, first try sending binary to our n8n webhook to receive an HTTP URL back
-      console.log('🌍 Production environment - uploading binary to webhook to get HTTP URL');
+    // NEW APPROACH: First upload to tmpfiles/imgur to get URL, then send that URL to webhook
+    // This avoids CORS issues with binary uploads
+    console.log('🌍 Production environment - using two-step upload process');
+    
+    // STEP 1: Upload to tmpfiles first to get a public URL
+    let fileUrl = null;
+    let uploadResult = null;
+    
+    try {
+      console.log('🔄 Step 1: Uploading to tmpfiles to get public URL...');
+      const tmp = await productionUpload.uploadToTmpfiles?.(file);
+      if (tmp && tmp.url) {
+        console.log('✅ Tmpfiles upload successful:', tmp);
+        fileUrl = tmp.url;
+        uploadResult = {
+          success: true,
+          url: tmp.url, 
+          fileName: tmp.fileName || file.name, 
+          fileSize: tmp.fileSize || file.size, 
+          fileType: tmp.fileType || file.type,
+          mimeType: tmp.mimeType || file.type,
+          category: tmp.category || (file.type.startsWith('image/') ? 'image' : 'document'),
+          id: `file-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          name: tmp.fileName || file.name,
+          size: tmp.fileSize || file.size,
+          type: tmp.fileType || file.type,
+          uploadService: 'tmpfiles'
+        };
+      }
+    } catch (e) {
+      console.warn('❌ Tmpfiles upload failed, trying imgur:', e.message);
+      
+      // Try Imgur if tmpfiles fails
       try {
-        const meta = { source: 'web_app', purpose: 'chat_attachment' };
-        const viaWebhook = await uploadBinaryFileToWebhook(file, meta);
-        if (viaWebhook?.success && viaWebhook.url) {
-          console.log('✅ Webhook binary upload successful:', viaWebhook);
-          return {
-            success: true,
-            url: viaWebhook.url,
+        const im = await this.uploadToImgur(file);
+        if (im && im.success && im.url) {
+          console.log('✅ Imgur upload successful:', im);
+          fileUrl = im.url;
+          uploadResult = {
+            ...im,
             id: `file-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-            fileName: file.name,
-            name: file.name, 
-            fileSize: file.size,
+            name: file.name,
             size: file.size,
-            fileType: file.type,
-            type: file.type,
-            mimeType: file.type,
-            category: file.type.startsWith('image/') ? 'image' : 'document',
-            uploadService: 'webhook-binary'
+            type: file.type
           };
         }
-        console.warn('⚠️ Webhook binary upload did not return URL, falling back...', viaWebhook);
-      } catch (e) {
-        console.warn('❌ Webhook binary upload failed, falling back:', e.message);
+      } catch (e2) {
+        console.warn('❌ Imgur fallback failed:', e2.message);
       }
-
-      // Fallbacks (still try without CORS-sensitive hosts). Keep imgur as last resort, then base64
+    }
+    
+    // If we got a URL, proceed to Step 2
+    if (fileUrl && uploadResult) {
+      // STEP 2: Send the URL to webhook (avoids CORS issues)
       try {
-        const tmp = await productionUpload.uploadToTmpfiles?.(file);
-        if (tmp && tmp.url) {
-          console.log('✅ Tmpfiles upload successful:', tmp);
-          return { 
-            success: true, 
-            url: tmp.url, 
-            fileName: tmp.fileName || file.name, 
-            fileSize: tmp.fileSize || file.size, 
-            fileType: tmp.fileType || file.type,
-            mimeType: tmp.mimeType || file.type,
-            category: tmp.category || (file.type.startsWith('image/') ? 'image' : 'document'),
-            uploadService: 'tmpfiles' 
+        console.log('🔄 Step 2: Sending file URL to webhook...');
+        const meta = { source: 'web_app', purpose: 'chat_attachment' };
+        const webhookResponse = await sendFileUrlToWebhook(
+          fileUrl, 
+          uploadResult.fileName || file.name,
+          uploadResult.fileType || file.type,
+          uploadResult.fileSize || file.size,
+          meta
+        );
+        
+        if (webhookResponse?.success) {
+          console.log('✅ Webhook received URL successfully:', webhookResponse);
+          // Use the URL from webhook if provided, otherwise keep original URL
+          const finalUrl = webhookResponse.url || fileUrl;
+          
+          return {
+            ...uploadResult,
+            url: finalUrl,
+            webhookProcessed: true
           };
+        } else {
+          console.warn('⚠️ Webhook URL processing failed, using direct URL:', webhookResponse?.error);
+          // Still return the file URL even if webhook processing failed
+          return uploadResult;
         }
-      } catch (e) {
-        console.warn('❌ Tmpfiles fallback failed:', e.message);
+      } catch (webhookErr) {
+        console.warn('⚠️ Error sending URL to webhook, using direct URL:', webhookErr.message);
+        return uploadResult;
       }
+    }
+
+    // Try direct binary webhook upload as a fallback (likely won't work due to CORS)
+    try {
+      console.log('⚠️ No URL obtained yet, trying direct webhook binary upload (may fail due to CORS)...');
+      const meta = { source: 'web_app', purpose: 'chat_attachment' };
+      const viaWebhook = await uploadBinaryFileToWebhook(file, meta);
+      if (viaWebhook?.success && viaWebhook.url) {
+        console.log('✅ Direct webhook binary upload successful:', viaWebhook);
+        return {
+          success: true,
+          url: viaWebhook.url,
+          id: `file-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          fileName: file.name,
+          name: file.name, 
+          fileSize: file.size,
+          size: file.size,
+          fileType: file.type,
+          type: file.type,
+          mimeType: file.type,
+          category: file.type.startsWith('image/') ? 'image' : 'document',
+          uploadService: 'webhook-binary'
+        };
+      }
+      console.warn('⚠️ Direct webhook binary upload failed, continuing to fallbacks...', viaWebhook);
+    } catch (e) {
+      console.warn('❌ Direct webhook binary upload failed:', e.message);
+    }
 
       try {
         const im = await this.uploadToImgur(file);

@@ -69,7 +69,68 @@ const getWebhookUrl = () => {
   }
 };
 
-// Upload binary file via multipart/form-data to webhook (n8n handles storage and returns URL)
+// FUNCTION 1: Send file URL (not binary) to webhook - this avoids CORS issues with binary uploads
+// Returns: { success: boolean, url?: string, data?: any, error?: string }
+export async function sendFileUrlToWebhook(fileUrl, fileName, fileType, fileSize, extraMeta = {}) {
+  try {
+    const webhookUrl = getWebhookUrl();
+
+    console.log(`🔄 Sending file URL to webhook: ${fileName} (${fileUrl})`);
+    
+    // Use JSON format instead of FormData - this is much more CORS friendly
+    const payload = {
+      action: 'file_upload_url',
+      fileUrl: fileUrl,
+      fileName: fileName || 'file',
+      fileType: fileType || 'application/octet-stream',
+      fileSize: fileSize || 0,
+      category: fileType?.startsWith('image/') ? 'image' : 'document',
+      source: extraMeta?.source || 'web_app',
+      purpose: extraMeta?.purpose || 'chat_attachment',
+      timestamp: new Date().toISOString(),
+      ...extraMeta
+    };
+
+    // Use axios with JSON which handles CORS better than fetch with FormData
+    const response = await apiClient.post(webhookUrl, payload);
+    
+    console.log(`🔄 Webhook URL response status: ${response.status}`, response.data);
+
+    if (response.status < 200 || response.status >= 300) {
+      console.error('❌ Webhook URL upload failed', { status: response.status, data: response.data });
+      return { success: false, error: `Webhook failed: ${response.status}`, data: response.data };
+    }
+
+    // If webhook returns a different URL, use it, otherwise keep original
+    const resultUrl = (response.data && (
+      response.data.url || 
+      response.data.fileUrl || 
+      response.data.file_url || 
+      response.data?.data?.url ||
+      response.data?.result?.url ||
+      response.data?.response?.url
+    )) || fileUrl; // Default to original URL if no new URL returned
+    
+    console.log(`✅ Webhook URL upload successful: ${resultUrl}`);
+    
+    return { 
+      success: true, 
+      url: resultUrl, 
+      fileName: fileName,
+      fileSize: fileSize,
+      fileType: fileType,
+      mimeType: fileType,
+      category: fileType?.startsWith('image/') ? 'image' : 'document',
+      data: response.data 
+    };
+  } catch (err) {
+    console.error('❌ sendFileUrlToWebhook error:', err);
+    return { success: false, error: err.message || 'Unknown upload error' };
+  }
+}
+
+// FUNCTION 2: Legacy binary upload function (kept for backward compatibility)
+// Note: This likely won't work due to CORS restrictions with binary uploads
 // Returns: { success: boolean, url?: string, data?: any, error?: string }
 export async function uploadBinaryFileToWebhook(file, extraMeta = {}) {
   try {
