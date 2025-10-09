@@ -42,13 +42,18 @@ class FileUploadService {
   async uploadFile(file) {
     console.log(`📤 Uploading file: ${file.name} (${file.size} bytes)`);
     
-    // For localhost development, use proxy server to get real HTTP URLs
+    // For localhost development, try proxy server first, then fallback to direct upload
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      console.log('🏠 Localhost detected - using proxy server for real HTTP URLs');
-      return this.uploadViaProxy(file);
+      console.log('🏠 Localhost detected - trying proxy server first');
+      try {
+        return await this.uploadViaProxy(file);
+      } catch (error) {
+        console.warn('❌ Proxy upload failed, falling back to direct upload:', error.message);
+        // Continue to direct upload method below
+      }
     }
     
-    // For production, try external services directly
+    // For production or fallback, try external services directly
     for (const serviceName of this.servicePriority) {
       try {
         console.log(`🔄 Trying upload service: ${serviceName}`);
@@ -59,7 +64,7 @@ class FileUploadService {
           return {
             success: true,
             url: result.url,
-            fileName: file.name,
+            fileName: file.name,  
             fileSize: file.size,
             fileType: file.type,
             uploadService: serviceName
@@ -73,9 +78,7 @@ class FileUploadService {
     
     // If all services fail, throw error
     throw new Error('All upload services failed');
-  }
-
-  /**
+  }  /**
    * Upload via proxy server to get real HTTP URLs on localhost
    * This bypasses CORS issues and returns actual HTTP/HTTPS URLs
    */
@@ -86,28 +89,40 @@ class FileUploadService {
       const formData = new FormData();
       formData.append('file', file);
       
-      console.log(`🔄 Uploading via proxy server...`);
+      console.log(`🔄 Uploading via proxy server to ${PROXY_URL}...`);
       const response = await fetch(PROXY_URL, {
         method: 'POST',
         body: formData
       });
       
+      console.log(`📡 Proxy response status: ${response.status}`);
+      
       if (!response.ok) {
-        throw new Error(`Proxy upload failed: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ Proxy error response:', errorText);
+        throw new Error(`Proxy upload failed: ${response.status} - ${errorText}`);
       }
       
       const result = await response.json();
+      console.log('📦 Proxy result:', result);
       
       if (!result.success || !result.url) {
         throw new Error('Proxy upload failed: No URL returned');
       }
       
       console.log(`✅ Successfully uploaded via proxy: ${result.url}`);
-      return result;
+      return {
+        success: true,
+        url: result.url,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        uploadService: 'proxy'
+      };
       
     } catch (error) {
       console.error('❌ Proxy upload failed:', error.message);
-      throw new Error(`Failed to upload via proxy: ${error.message}`);
+      throw error;
     }
   }
 
