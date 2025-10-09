@@ -1,8 +1,9 @@
 /**
- * Simple File Upload Service
- * Upload files to public storage and return HTTP/HTTPS URLs
- * No base64 processing - just direct file upload and URL return
+ * Smart File Upload Service
+ * Auto-detects environment and uses appropriate upload method
  */
+
+import productionUpload from './productionUpload.js';
 
 class FileUploadService {
   constructor() {
@@ -42,42 +43,21 @@ class FileUploadService {
   async uploadFile(file) {
     console.log(`📤 Uploading file: ${file.name} (${file.size} bytes)`);
     
-    // For localhost development, try proxy server first, then fallback to direct upload
+    // For localhost development, try proxy server first
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
       console.log('🏠 Localhost detected - trying proxy server first');
       try {
         return await this.uploadViaProxy(file);
       } catch (error) {
-        console.warn('❌ Proxy upload failed, falling back to direct upload:', error.message);
-        // Continue to direct upload method below
+        console.warn('❌ Proxy upload failed, falling back to base64:', error.message);
+        // Fallback to base64 conversion
+        return await this.convertToBase64(file);
       }
     }
     
-    // For production or fallback, try external services directly
-    for (const serviceName of this.servicePriority) {
-      try {
-        console.log(`🔄 Trying upload service: ${serviceName}`);
-        const result = await this.uploadToService(file, serviceName);
-        
-        if (result && result.url && result.url.startsWith('http')) {
-          console.log(`✅ Successfully uploaded to ${serviceName}: ${result.url}`);
-          return {
-            success: true,
-            url: result.url,
-            fileName: file.name,  
-            fileSize: file.size,
-            fileType: file.type,
-            uploadService: serviceName
-          };
-        }
-      } catch (error) {
-        console.warn(`❌ Failed to upload to ${serviceName}:`, error.message);
-        continue;
-      }
-    }
-    
-    // If all services fail, throw error
-    throw new Error('All upload services failed');
+    // For production, use base64 conversion (temporary CORS workaround)
+    console.log('🌍 Production environment - using base64 conversion (CORS workaround)');
+    return await this.convertToBase64(file);
   }  /**
    * Upload via proxy server to get real HTTP URLs on localhost
    * This bypasses CORS issues and returns actual HTTP/HTTPS URLs
@@ -222,6 +202,36 @@ class FileUploadService {
       url: result.trim(),
       service: '0x0.st'
     };
+  }
+
+  /**
+   * Convert file to base64 data URL (fallback for CORS issues)
+   * @param {File} file - File to convert
+   * @returns {Promise<Object>} - Result with data URL
+   */
+  async convertToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = function(e) {
+        console.log(`✅ Successfully converted ${file.name} to base64`);
+        resolve({
+          success: true,
+          url: e.target.result, // data:image/png;base64,... format
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          uploadService: 'base64'
+        });
+      };
+      
+      reader.onerror = function(error) {
+        console.error('❌ Base64 conversion failed:', error);
+        reject(new Error('Failed to convert file to base64'));
+      };
+      
+      reader.readAsDataURL(file);
+    });
   }
 }
 

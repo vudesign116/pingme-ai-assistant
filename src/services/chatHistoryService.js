@@ -55,13 +55,38 @@ export const chatHistoryService = {
         expiryDate.setDate(expiryDate.getDate() - HISTORY_EXPIRY_DAYS);
         return savedDate > expiryDate;
       });
+
+      // Clean invalid blob URLs from attachments
+      const cleanedHistory = validHistory.map(msg => {
+        if (msg.attachments && msg.attachments.length > 0) {
+          const cleanedAttachments = msg.attachments.map(attachment => {
+            // Remove invalid blob URLs
+            if (attachment.url && attachment.url.startsWith('blob:')) {
+              console.log(`🧹 Removing invalid blob URL: ${attachment.name}`);
+              return {
+                ...attachment,
+                url: null, // Remove blob URL
+                isExpired: true
+              };
+            }
+            return attachment;
+          });
+          
+          return {
+            ...msg,
+            attachments: cleanedAttachments
+          };
+        }
+        return msg;
+      });
       
-      // Nếu có tin nhắn bị lọc, cập nhật localStorage
-      if (validHistory.length !== userHistory.length) {
-        this.saveChatHistory(userId, validHistory);
+      // Nếu có tin nhắn bị lọc hoặc cleaned, cập nhật localStorage
+      if (cleanedHistory.length !== userHistory.length || 
+          JSON.stringify(cleanedHistory) !== JSON.stringify(validHistory)) {
+        this.saveChatHistory(userId, cleanedHistory);
       }
       
-      return validHistory;
+      return cleanedHistory;
     } catch (error) {
       console.error('❌ Error loading chat history:', error);
       return [];
