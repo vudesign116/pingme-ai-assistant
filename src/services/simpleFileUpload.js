@@ -49,15 +49,15 @@ class FileUploadService {
       try {
         return await this.uploadViaProxy(file);
       } catch (error) {
-        console.warn('❌ Proxy upload failed, falling back to file.io:', error.message);
-        // Fallback to file.io service
-        return await this.uploadToFileIO(file);
+        console.warn('❌ Proxy upload failed, falling back to imgur:', error.message);
+        // Fallback to imgur service
+        return await this.uploadToImgur(file);
       }
     }
     
-    // For production, use file.io (no CORS restrictions)
-    console.log('🌍 Production environment - using file.io service');
-    return await this.uploadToFileIO(file);
+    // For production, use imgur (no CORS restrictions)
+    console.log('🌍 Production environment - using imgur service');
+    return await this.uploadToImgur(file);
   }  /**
    * Upload via proxy server to get real HTTP URLs on localhost
    * This bypasses CORS issues and returns actual HTTP/HTTPS URLs
@@ -205,44 +205,64 @@ class FileUploadService {
   }
 
   /**
-   * Upload to file.io - No CORS restrictions, returns HTTP URLs
+   * Upload to imgur API - More reliable, no CORS restrictions
    * @param {File} file - File to upload
    * @returns {Promise<Object>} - Result with HTTP URL
    */
-  async uploadToFileIO(file) {
+  async uploadToImgur(file) {
     try {
-      const formData = new FormData();
-      formData.append('file', file);
+      // Convert file to base64 first
+      const base64 = await this.fileToBase64(file);
+      const base64Data = base64.split(',')[1]; // Remove data:image/xxx;base64, prefix
       
-      console.log(`🔄 Uploading to file.io...`);
-      const response = await fetch('https://file.io/', {
+      console.log(`🔄 Uploading to imgur...`);
+      const response = await fetch('https://api.imgur.com/3/image', {
         method: 'POST',
-        body: formData
+        headers: {
+          'Authorization': 'Client-ID 546c25a59c58ad7', // Public client ID
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image: base64Data,
+          type: 'base64'
+        })
       });
       
       if (!response.ok) {
-        throw new Error(`file.io upload failed: ${response.status}`);
+        throw new Error(`Imgur upload failed: ${response.status}`);
       }
       
       const result = await response.json();
       
-      if (!result.success || !result.link) {
-        throw new Error('file.io did not return valid URL');
+      if (!result.success || !result.data || !result.data.link) {
+        throw new Error('Imgur did not return valid URL');
       }
       
-      console.log(`✅ Successfully uploaded to file.io: ${result.link}`);
+      console.log(`✅ Successfully uploaded to imgur: ${result.data.link}`);
       return {
         success: true,
-        url: result.link, // Real HTTP/HTTPS URL
+        url: result.data.link, // Real HTTP/HTTPS URL
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type,
-        uploadService: 'file.io'
+        uploadService: 'imgur'
       };
     } catch (error) {
-      console.error('❌ file.io upload failed:', error);
+      console.error('❌ Imgur upload failed:', error);
       throw error;
     }
+  }
+
+  /**
+   * Convert file to base64 (helper method)
+   */
+  async fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   }
 
   /**
